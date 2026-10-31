@@ -5,6 +5,7 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 rust-version.workspace = true
+build = "build.rs"
 
 [[bin]]
 name = "surveillance"
@@ -17,6 +18,8 @@ gio = "0.21"
 gstreamer = "0.24"
 gstreamer-app = "0.24"
 gstreamer-video = "0.24"
+async-channel = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 anyhow.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -25,3 +28,6 @@ serde.workspace = true
 ss-api = { path = "../ss-api" }
 ss-stream = { path = "../ss-stream" }
 ss-config = { path = "../ss-config" }
+
+[build-dependencies]
+glib-build-tools = "0.21"
