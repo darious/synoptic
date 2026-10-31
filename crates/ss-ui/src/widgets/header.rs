@@ -12,7 +12,7 @@ use crate::widgets::controls::{
 };
 use crate::widgets::popovers;
 
-pub fn build(store: &Rc<Store>, _services: &Rc<Services>) -> gtk::Box {
+pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     header.add_css_class("header");
 
@@ -111,7 +111,7 @@ pub fn build(store: &Rc<Store>, _services: &Rc<Services>) -> gtk::Box {
     badge.set_can_target(false);
     bell_overlay.add_overlay(&badge);
     bell_button.set_child(Some(&bell_overlay));
-    bell_button.set_popover(Some(&popovers::notifications(store)));
+    bell_button.set_popover(Some(&popovers::notifications(store, services)));
     header.append(&bell_button);
 
     // 9. theme toggle

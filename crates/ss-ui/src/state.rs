@@ -322,6 +322,12 @@ impl Store {
         self.state.borrow()
     }
 
+    /// Direct mutable access without notification or persistence. Prefer
+    /// [`Store::update`]; this exists for reverting optimistic changes.
+    pub fn state_mut(&self) -> RefMut<'_, AppState> {
+        self.state.borrow_mut()
+    }
+
     /// The loaded `config.toml` model; mutate then call [`Store::save_soon`].
     pub fn config(&self) -> RefMut<'_, ss_config::AppConfig> {
         self.config.borrow_mut()

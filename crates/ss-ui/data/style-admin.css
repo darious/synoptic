@@ -1,1 +1,43 @@
 /* style-admin.css: classes owned by the admin work; tokens come from style.css */
+
+/* ---------- shared form bits (Login, Camera Settings, Add license) ---------- */
+.field-label { font-size: 12px; font-weight: 500; color: var(--muted); }
+.error-text { font-size: 12px; color: var(--danger); }
+.otp-entry { font-family: "IBM Plex Mono", monospace; font-size: 20px; font-weight: 500; letter-spacing: 0.3em; }
+button.destructive { background-color: var(--danger); border-color: var(--danger); color: #ffffff; }
+button.destructive:hover { background-color: var(--danger); opacity: 0.92; }
+.dialog dropdown { min-width: 200px; }
+.dialog .row-label { font-size: 13px; }
+
+/* ---------- notifications popover ---------- */
+.notification-row { padding: 8px 6px; border-bottom: 1px solid var(--border); }
+.notification-row:last-child { border-bottom: none; }
+.notification-row .text { font-size: 12px; }
+.notification-row.unread .text { font-weight: 600; }
+.notification-row .time { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--muted); }
+.notification-row image.type-motion { color: var(--event-orange); }
+.notification-row image.type-people { color: var(--online-green); }
+.notification-row image.type-tampering { color: var(--live-red); }
+.notification-row image.type-vehicle { color: var(--blue); }
+.notification-row image.muted { color: var(--muted); }
+
+/* ---------- licenses ---------- */
+.kpi-card { background-color: var(--panel); border: 1px solid var(--border); border-radius: 4px; }
+.table { border: 1px solid var(--border); border-radius: 4px; }
+.table-header label { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; }
+.table-row:last-child { border-bottom: none; }
+.status-dot.sm { min-width: 7px; min-height: 7px; }
+.table-empty { padding: 24px; font-size: 12px; color: var(--muted); }
+
+/* ---------- settings ---------- */
+.settings .group-title { margin-top: 12px; }
+.setting-row dropdown { min-width: 200px; }
+
+/* ---------- about ---------- */
+.about .tile { padding: 0; }
+.notice image { color: var(--blue); }
+.notice .title { font-size: 13px; font-weight: 600; }
+.info-row .key { font-family: "IBM Plex Sans", sans-serif; font-size: 12px; color: var(--muted); min-width: 140px; }
+.info-row .val { font-size: 13px; }
+.info-row linkbutton { padding: 0; min-height: 0; }
+.info-row linkbutton > label { color: var(--blue); font-size: 13px; text-decoration: none; }

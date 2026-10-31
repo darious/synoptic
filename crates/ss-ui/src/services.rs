@@ -48,6 +48,7 @@ pub struct Connected {
     pub cameras: Vec<Camera>,
     /// New trusted-device token to persist (when `trust_device` was set).
     pub device_id: Option<String>,
+    pub home_mode: bool,
 }
 
 #[derive(Debug)]
@@ -150,11 +151,13 @@ impl Services {
                 Vec::new()
             });
             let device_id = client.device_id();
+            let home_mode = client.home_mode().await.map(|h| h.on).unwrap_or(false);
             *slot.write().expect("client lock") = Some(client);
             Ok(Connected {
                 info,
                 cameras,
                 device_id,
+                home_mode,
             })
         })
     }
@@ -164,6 +167,14 @@ impl Services {
         self.run(async move {
             let client = client?;
             client.list_cameras().await.ok()
+        })
+    }
+
+    pub fn set_home_mode(&self, on: bool) -> impl Future<Output = Result<(), String>> + use<> {
+        let client = self.client();
+        self.run(async move {
+            let client = client.ok_or_else(|| "not connected".to_string())?;
+            client.set_home_mode(on).await.map_err(|e| e.to_string())
         })
     }
 
@@ -203,6 +214,20 @@ pub fn install(store: &Rc<Store>, services: &Rc<Services>) {
             Change::Connection if store.get().logged_in() => {
                 start_camera_polling(&store, &services);
             }
+            Change::HomeMode => {
+                let on = store.get().home_mode;
+                let fut = services.set_home_mode(on);
+                let store = store.clone();
+                glib::spawn_future_local(async move {
+                    if let Err(e) = fut.await {
+                        tracing::warn!("home mode: {e}");
+                        store.toast(format!("Home mode failed: {e}"));
+                        // revert silently (no second API call)
+                        store.state_mut().home_mode = !on;
+                        store.emit(&Change::HomeMode);
+                    }
+                });
+            }
             _ => {}
         }
     });
@@ -222,10 +247,33 @@ pub fn apply_connected(store: &Rc<Store>, p: &ConnectParams, c: Connected) {
             .unwrap_or_default(),
         ds_model: c.info.ds_model_name.clone(),
     };
+    // layouts belong to the profile we just logged in to
+    let layouts: Vec<(crate::state::Layout, Vec<i64>)> = store
+        .config()
+        .profiles
+        .get(&p.profile)
+        .map(|prof| {
+            prof.state
+                .layout_cameras
+                .iter()
+                .filter_map(|(k, v)| {
+                    crate::state::Layout::from_key(k)
+                        .map(|l| (l, v.iter().map(|&c| c as i64).collect()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     store.update(Change::Connection, |s| {
         s.connection = Some(conn);
         s.cameras = c.cameras;
+        s.home_mode = c.home_mode;
+        if !layouts.is_empty() {
+            s.slots_by_layout = layouts.into_iter().collect();
+        }
     });
+    store.emit(&Change::Layout);
+    store.emit(&Change::Slots);
+    store.emit(&Change::HomeMode);
     store.emit(&Change::Cameras);
     store.toast(format!("Connected to {}", p.profile));
 }
