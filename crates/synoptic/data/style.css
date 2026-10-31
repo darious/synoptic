@@ -1,5 +1,5 @@
 /* Surveillance Station Client — GTK4 stylesheet.
- * Source of truth: design/handoff/README.md ("Design tokens" and per-screen
+ * Source of truth: the UI spec ("Design tokens" and per-screen
  * sections). Values are copied verbatim; GTK-specific approximations are
  * marked with "GTK:" comments. Loaded at STYLE_PROVIDER_PRIORITY_APPLICATION.
  *

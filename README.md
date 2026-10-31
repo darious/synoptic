@@ -48,7 +48,6 @@ RUST_LOG=synoptic=debug,ss_stream=debug cargo run -p synoptic   # with logs
 | `crates/ss-play` | `FrameSink` trait and mpv/ffmpeg subprocess sinks |
 | `crates/ss-config` | profiles, settings and keyring secrets |
 | `crates/ss-cli` | `ss` command-line tool |
-| `design/handoff` | UI specification (README + HTML prototype) |
 | `docs/architecture.md` | teardown of the official Windows client and the protocol notes derived from it |
 | `tools/` | stdlib-only NSIS and asar extractors used for the teardown |
 

@@ -1,6 +1,6 @@
 //! Synoptic — GTK4 client for Synology Surveillance Station.
 //!
-//! Layout and visual values come from `design/handoff/README.md`; the CSS
+//! Layout and visual values come from the UI spec; the CSS
 //! tokens live in `data/style.css`; icons are Material Symbols Rounded SVGs
 //! compiled into the binary as a GResource (`ms-<name>-symbolic`).
 //! Module map and the parallel-work split: `docs/ui-plan.md`.

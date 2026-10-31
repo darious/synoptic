@@ -1,6 +1,6 @@
 # Synoptic UI implementation plan
 
-Spec: `design/handoff/README.md` (authoritative; the `.dc.html` files are a
+Spec: `~/.cache/synoptic/design/handoff/README.md`, kept outside the repo (authoritative; the `.dc.html` files are a
 JS-rendered prototype). Tokens are already in `crates/synoptic/data/style.css`.
 Icons: Material Symbols Rounded SVGs in `crates/synoptic/data/icons/` as
 `ms-<name>-symbolic` (GTK recolours `-symbolic` SVGs with the CSS `color`).

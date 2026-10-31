@@ -1,5 +1,5 @@
 //! Live View page: the n×n grid over a 112 px timeline strip
-//! (`design/handoff/README.md` §1). The grid owns the slots and their
+//! (the UI spec §1). The grid owns the slots and their
 //! streams; the timeline drives the grid's playback controller.
 
 pub mod grid;

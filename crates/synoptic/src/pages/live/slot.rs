@@ -1,6 +1,6 @@
 //! One Live View slot: a `gtk::Picture` under overlays (name pill, status
 //! pill, timecode, hover toolbar) plus the empty and offline states, and the
-//! [`VideoStream`] that feeds it. See `design/handoff/README.md` §1 "Slot".
+//! [`VideoStream`] that feeds it. See the UI spec §1 "Slot".
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

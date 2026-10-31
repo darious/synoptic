@@ -18,7 +18,7 @@ use crate::services::Services;
 use crate::state::{Store, Theme};
 use crate::widgets::controls::{divider_v, label, set_class, spacer};
 
-// --- constants (design/handoff/README.md §1 "Timeline strip") ------------------
+// --- constants (the UI spec §1 "Timeline strip") ------------------
 
 /// Default window: 2 h.
 #[cfg(test)]

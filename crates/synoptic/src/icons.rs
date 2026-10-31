@@ -3,7 +3,7 @@
 //! The SVGs live in `data/icons/ms-<name>-symbolic.svg` and are compiled into
 //! the GResource under `icons/scalable/actions/`, so GTK treats them as
 //! symbolic icons and recolours them with the CSS `color`.
-//! `name` is the Material name used in `design/handoff/README.md`
+//! `name` is the Material name used in the UI spec
 //! (`videocam`, `left_panel_close`, …). Filled variants: `play_arrow_fill`.
 
 use gtk::prelude::*;

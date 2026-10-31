@@ -3,7 +3,7 @@
 //! One [`Store`] per window. Widgets read with [`Store::get`], mutate with
 //! [`Store::update`] (which emits a [`Change`]) and react with
 //! [`Store::subscribe`]. Fields follow the "State" section of
-//! `design/handoff/README.md`. Persistent fields are mirrored into
+//! the UI spec. Persistent fields are mirrored into
 //! `ss_config::AppConfig` and saved (debounced) through `ss_config::save`.
 
 use std::cell::{Cell, Ref, RefCell, RefMut};

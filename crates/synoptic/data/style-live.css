@@ -1,5 +1,5 @@
 /* style-live.css: classes owned by the live work; tokens come from style.css.
- * Spec: design/handoff/README.md §1 "Live View". */
+ * Spec: UI spec §1 "Live View". */
 
 /* stage: grid over the timeline strip, black gutters */
 .live-stage { background-color: var(--gutter); }

@@ -14,7 +14,7 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 | `crates/ss-play` | `FrameSink` trait + subprocess sinks (mpv via pipe, ffmpeg remux to file). No GStreamer/libmpv dev libs on this machine yet. | – |
 | `crates/ss-config` | profiles + settings TOML (same keys as the reference's `config.toml`), secrets via `keyring` | – |
 | `crates/ss-cli` | `ss` binary wiring the above for manual testing against a real NAS | all |
-| `crates/synoptic` | GTK4 app `synoptic` (app id `io.github.darious.Synoptic`) implementing `design/handoff/README.md`. Module map in `docs/ui-plan.md`: `state.rs` (Store/Change bus, config persistence), `services.rs` (tokio + ss-api), `widgets/` shell, `pages/live` (grid, slots, Cairo timeline), `video/` (GStreamer `appsrc → parse → decodebin3 → gtk4paintablesink`, MixStream bridge), `pages/browse`, `pages/{licenses,settings,about}`, `dialogs/`. CSS: `data/style.css` tokens + `style-{live,browse,admin}.css`; icons `data/icons/ms-*-symbolic.svg` (Material Symbols, GResource). Needs `sudo apt install libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-gtk4 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-vaapi gstreamer1.0-libav gstreamer1.0-tools fonts-ibm-plex` | api, stream, config |
+| `crates/synoptic` | GTK4 app `synoptic` (app id `io.github.darious.Synoptic`) implementing the UI spec (private, see Gotchas). Module map in `docs/ui-plan.md`: `state.rs` (Store/Change bus, config persistence), `services.rs` (tokio + ss-api), `widgets/` shell, `pages/live` (grid, slots, Cairo timeline), `video/` (GStreamer `appsrc → parse → decodebin3 → gtk4paintablesink`, MixStream bridge), `pages/browse`, `pages/{licenses,settings,about}`, `dialogs/`. CSS: `data/style.css` tokens + `style-{live,browse,admin}.css`; icons `data/icons/ms-*-symbolic.svg` (Material Symbols, GResource). Needs `sudo apt install libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-gtk4 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-vaapi gstreamer1.0-libav gstreamer1.0-tools fonts-ibm-plex` | api, stream, config |
 
 ## Commands
 
@@ -36,7 +36,7 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 
 ## Gotchas
 
-- `design/handoff/` is the UI spec (README + HTML prototype). The prototype is JS-rendered; the README is authoritative.
+- The UI spec (design README + JS-rendered HTML prototype) is private and lives outside the repo at `~/.cache/synoptic/design/handoff/`; the README is authoritative. `design/` is gitignored and must never be committed.
 - This box is a headless tty (no DISPLAY/Wayland, no Xvfb); the UI cannot be screenshotted here.
 
 - GTK4/GStreamer dev packages are installed; libmpv is not (ss-play uses the `mpv` binary).
