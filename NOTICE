@@ -5,3 +5,7 @@ Protocol knowledge in this project comes from two sources:
 2. renaudallard/surveillance-station-client (BSD-2-Clause,
    Copyright (c) 2026 Renaud Allard), whose API and WebSocket handling were
    used as a reference while writing the Rust equivalents.
+3. Icons in crates/ss-ui/data/icons are Material Symbols Rounded from
+   google/material-design-icons, Apache License 2.0
+   (https://github.com/google/material-design-icons/blob/master/LICENSE),
+   renamed to ms-<name>-symbolic.svg for GTK's symbolic icon handling.
