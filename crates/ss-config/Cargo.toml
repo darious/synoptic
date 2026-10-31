@@ -1,0 +1,11 @@
+[package]
+name = "ss-config"
+description = "Connection profiles, settings and secrets, file-compatible with renaudallard/surveillance-station-client config.toml"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[dev-dependencies]

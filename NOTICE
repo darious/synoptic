@@ -1,0 +1,7 @@
+Protocol knowledge in this project comes from two sources:
+
+1. Static analysis of Synology Surveillance Station Client 2.2.3-2598
+   (see docs/architecture.md). No Synology code is included.
+2. renaudallard/surveillance-station-client (BSD-2-Clause,
+   Copyright (c) 2026 Renaud Allard), whose API and WebSocket handling were
+   used as a reference while writing the Rust equivalents.

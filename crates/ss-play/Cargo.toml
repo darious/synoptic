@@ -1,0 +1,11 @@
+[package]
+name = "ss-play"
+description = "Video sinks: feed Annex-B elementary streams to mpv/ffmpeg subprocesses (no native dev libs required)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[dev-dependencies]

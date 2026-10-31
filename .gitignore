@@ -1,0 +1,5 @@
+# Vendor installer and anything extracted from it stay out of the repo
+*.exe
+extracted/
+target/
+Cargo.lock.bak
