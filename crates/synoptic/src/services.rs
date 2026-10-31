@@ -70,13 +70,13 @@ impl Services {
     pub fn new() -> Rc<Services> {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
-            .thread_name("ss-ui-tokio")
+            .thread_name("synoptic-tokio")
             .enable_all()
             .build()
             .expect("tokio runtime");
         let handle = rt.handle().clone();
         let thread = std::thread::Builder::new()
-            .name("ss-ui-rt".into())
+            .name("synoptic-rt".into())
             .spawn(move || rt.block_on(std::future::pending::<()>()))
             .expect("runtime thread");
         Rc::new(Services {
@@ -131,7 +131,7 @@ impl Services {
             let opts = LoginOptions {
                 otp_code: p.otp_code.clone(),
                 device_id: p.device_id.clone(),
-                device_name: Some("rust_ss".into()),
+                device_name: Some("Synoptic".into()),
                 enable_device_token: p.trust_device,
                 remember_credentials: true,
             };

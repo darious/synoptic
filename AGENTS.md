@@ -1,9 +1,9 @@
-# rust_ss — agent map
+# Synoptic — agent map
 
 Linux client for Synology Surveillance Station in Rust. Reverse-engineering
 notes and the port plan: `docs/architecture.md` (read §5–§7 first).
 Reference implementation (Python/GTK, BSD-2) is cloned at
-`~/.cache/rust_ss/ref/ssc-gtk`; port its *protocol knowledge*, not its UI.
+`~/.cache/synoptic/ref/ssc-gtk`; port its *protocol knowledge*, not its UI.
 
 ## Layout
 
@@ -14,12 +14,12 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 | `crates/ss-play` | `FrameSink` trait + subprocess sinks (mpv via pipe, ffmpeg remux to file). No GStreamer/libmpv dev libs on this machine yet. | – |
 | `crates/ss-config` | profiles + settings TOML (same keys as the reference's `config.toml`), secrets via `keyring` | – |
 | `crates/ss-cli` | `ss` binary wiring the above for manual testing against a real NAS | all |
-| `crates/ss-ui` | GTK4 app `surveillance` implementing `design/handoff/README.md`. Module map in `docs/ui-plan.md`: `state.rs` (Store/Change bus, config persistence), `services.rs` (tokio + ss-api), `widgets/` shell, `pages/live` (grid, slots, Cairo timeline), `video/` (GStreamer `appsrc → parse → decodebin3 → gtk4paintablesink`, MixStream bridge), `pages/browse`, `pages/{licenses,settings,about}`, `dialogs/`. CSS: `data/style.css` tokens + `style-{live,browse,admin}.css`; icons `data/icons/ms-*-symbolic.svg` (Material Symbols, GResource). Needs `sudo apt install libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-gtk4 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-vaapi gstreamer1.0-libav gstreamer1.0-tools fonts-ibm-plex` | api, stream, config |
+| `crates/synoptic` | GTK4 app `synoptic` (app id `io.github.darious.Synoptic`) implementing `design/handoff/README.md`. Module map in `docs/ui-plan.md`: `state.rs` (Store/Change bus, config persistence), `services.rs` (tokio + ss-api), `widgets/` shell, `pages/live` (grid, slots, Cairo timeline), `video/` (GStreamer `appsrc → parse → decodebin3 → gtk4paintablesink`, MixStream bridge), `pages/browse`, `pages/{licenses,settings,about}`, `dialogs/`. CSS: `data/style.css` tokens + `style-{live,browse,admin}.css`; icons `data/icons/ms-*-symbolic.svg` (Material Symbols, GResource). Needs `sudo apt install libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-gtk4 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-vaapi gstreamer1.0-libav gstreamer1.0-tools fonts-ibm-plex` | api, stream, config |
 
 ## Commands
 
 - Build: `cargo build --workspace`
-- Run the app: `cargo run -p ss-ui` (needs a Wayland/X11 session; `RUST_LOG=ss_ui=debug` for logs)
+- Run the app: `cargo run -p synoptic` (needs a Wayland/X11 session; `RUST_LOG=synoptic=debug` for logs)
 - Test: `cargo test --workspace`
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`
 - Format: `cargo fmt --all` (check with `--check`)
@@ -44,4 +44,5 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
   `pages/browse/{recordings,timelapse}.rs` (GetThumbnail, TimeLapse) are known shortcuts.
 - There is no NAS reachable from CI/agents. Integration against a NAS is
   manual via `ss-cli`.
-- Vendor installer `*.exe` and `~/.cache/rust_ss/**` stay out of git.
+- Vendor installer `*.exe`, the design zip and `~/.cache/synoptic/**` stay out of git.
+- `ss-cli` wiremock tests spawn the `ss` binary via `CARGO_BIN_EXE_ss`, which cargo bakes in at compile time and does not re-track; after moving the checkout, `touch crates/ss-cli/tests/cameras_wiremock.rs`.

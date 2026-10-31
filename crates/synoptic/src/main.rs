@@ -1,4 +1,4 @@
-//! Surveillance Station Client — GTK4 UI.
+//! Synoptic — GTK4 client for Synology Surveillance Station.
 //!
 //! Layout and visual values come from `design/handoff/README.md`; the CSS
 //! tokens live in `data/style.css`; icons are Material Symbols Rounded SVGs
@@ -21,18 +21,18 @@ use gtk::{gdk, gio, glib};
 use crate::services::Services;
 use crate::state::{Change, Store, Theme};
 
-pub const APP_ID: &str = "org.rust_ss.surveillance";
-pub const RESOURCE_PREFIX: &str = "/org/rust_ss/surveillance";
+pub const APP_ID: &str = "io.github.darious.Synoptic";
+pub const RESOURCE_PREFIX: &str = "/io/github/darious/Synoptic";
 
 fn main() -> glib::ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "warn,ss_ui=info,ss_api=info,ss_stream=info".into()),
+                .unwrap_or_else(|_| "warn,synoptic=info,ss_api=info,ss_stream=info".into()),
         )
         .init();
 
-    gio::resources_register_include!("ss-ui.gresource").expect("embedded resources");
+    gio::resources_register_include!("synoptic.gresource").expect("embedded resources");
     gstreamer::init().expect("GStreamer init");
 
     let app = gtk::Application::builder().application_id(APP_ID).build();
@@ -68,7 +68,7 @@ fn build_ui(app: &gtk::Application) {
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
-        .title("Surveillance Station Client")
+        .title("Synoptic")
         .default_width(1280)
         .default_height(800)
         .build();

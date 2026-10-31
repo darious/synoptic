@@ -1,8 +1,8 @@
-# ss-ui implementation plan
+# Synoptic UI implementation plan
 
 Spec: `design/handoff/README.md` (authoritative; the `.dc.html` files are a
-JS-rendered prototype). Tokens are already in `crates/ss-ui/data/style.css`.
-Icons: Material Symbols Rounded SVGs in `crates/ss-ui/data/icons/` as
+JS-rendered prototype). Tokens are already in `crates/synoptic/data/style.css`.
+Icons: Material Symbols Rounded SVGs in `crates/synoptic/data/icons/` as
 `ms-<name>-symbolic` (GTK recolours `-symbolic` SVGs with the CSS `color`).
 
 ## Stack
@@ -22,7 +22,7 @@ Icons: Material Symbols Rounded SVGs in `crates/ss-ui/data/icons/` as
 ## Module layout (one owner per module during parallel work)
 
 ```
-crates/ss-ui/src
+crates/synoptic/src
 ├── main.rs            gtk::Application, CSS + icon resource loading, theme class
 ├── state.rs           AppState, Change enum, Bus, persistence glue (ss-config)
 ├── services.rs        tokio runtime thread, ApiHandle (login/cameras/recordings/…), StreamHandle
@@ -76,6 +76,6 @@ them with sans-serif/monospace fallbacks.
 
 ## Testing on this machine
 
-Headless tty, no Xvfb. `cargo build -p ss-ui` and unit tests of pure logic
+Headless tty, no Xvfb. `cargo build -p synoptic` and unit tests of pure logic
 (timeline math, pagination, filters) run here; visual checks need a desktop
 session. Keep logic out of widgets where practical so it is testable.

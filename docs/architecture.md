@@ -157,7 +157,7 @@ a plain Linux browser already works; what the client adds is hardware decoding
 of many simultaneous streams, native login/tray/QuickConnect, and export
 post-processing.
 
-Two viable designs for `rust_ss`:
+Two viable designs for Synoptic:
 
 **A. Native Monitor Center (fully Rust, no web UI).**
 Login via DSM Web API → camera list (`SYNO.SurveillanceStation.Camera`) →
@@ -178,9 +178,9 @@ URL formats (§3.2), the ffmpeg export recipes (§2.3). See §7 for the decision
 
 ## 5. Decompilation notes (video_plugin.dll, Ghidra 12.1.4 via `rea`)
 
-Ghidra snapshot: `~/.cache/rust_ss/ghidra_in/video_plugin.snapshot`
+Ghidra snapshot: `~/.cache/synoptic/ghidra_in/video_plugin.snapshot`
 (19 973 procedures, 7 886 strings). Re-run with
-`cd ~/.cache/rust_ss/ghidra_in && rea decompile ./video_plugin.dll <addr> --snapshot ./video_plugin.snapshot`.
+`cd ~/.cache/synoptic/ghidra_in && rea decompile ./video_plugin.dll <addr> --snapshot ./video_plugin.snapshot`.
 
 | Address | What it is | Finding |
 |---|---|---|
@@ -199,7 +199,7 @@ Monitor Center, with the same in-band `seekMs=…&stamp=n` /
 <https://github.com/renaudallard/surveillance-station-client> (BSD-2, Python
 3.11 + GTK4 + libmpv, v0.15.0, 2026-10-21, ~26 k lines) is a complete native
 Linux/BSD client built against the same NAS protocols, derived from sniffing
-the browser Monitor Center. Clone kept at `~/.cache/rust_ss/ref/ssc-gtk`. It
+the browser Monitor Center. Clone kept at `~/.cache/synoptic/ref/ssc-gtk`. It
 already has, and documents in code comments:
 
 - **Login**: `SYNO.API.Auth` Login v6 with `otp_code`, `enable_device_token`,
@@ -219,7 +219,7 @@ already has, and documents in code comments:
 - Recordings/Events/Snapshots/TimeLapse/PTZ/HomeMode/AudioOut (push-to-talk)
   APIs, fisheye dewarp on GPU, AppImage packaging.
 
-## 7. Recommendation for rust_ss
+## 7. Recommendation for Synoptic
 
 Design **A (native client)** is the right target, and the reference project
 removes most of the protocol risk. A Rust equivalent would be:

@@ -56,13 +56,13 @@ pub fn build(store: &Rc<Store>, _services: &Rc<Services>) -> gtk::Widget {
     column.add_css_class("about");
     column.set_valign(gtk::Align::Start);
 
-    let tile = gtk::Label::new(Some("SS"));
+    let tile = gtk::Label::new(Some("Sy"));
     tile.add_css_class("tile");
     tile.set_size_request(64, 64);
     tile.set_halign(gtk::Align::Center);
     column.append(&tile);
 
-    let title = label("Surveillance Station Client", &["title"]);
+    let title = label("Synoptic", &["title"]);
     title.set_halign(gtk::Align::Center);
     column.append(&title);
     let version = label(&version_line(), &["version"]);

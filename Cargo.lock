@@ -2648,29 +2648,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ss-ui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-channel",
- "chrono",
- "gio",
- "glib",
- "glib-build-tools",
- "gstreamer",
- "gstreamer-app",
- "gstreamer-video",
- "gtk4",
- "serde",
- "ss-api",
- "ss-config",
- "ss-stream",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2723,6 +2700,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 dependencies = [
  "futures-core",
+]
+
+[[package]]
+name = "synoptic"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "chrono",
+ "gio",
+ "glib",
+ "glib-build-tools",
+ "gstreamer",
+ "gstreamer-app",
+ "gstreamer-video",
+ "gtk4",
+ "serde",
+ "ss-api",
+ "ss-config",
+ "ss-stream",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

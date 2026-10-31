@@ -7,6 +7,7 @@ edition = "2024"
 version = "0.1.0"
 license = "BSD-2-Clause"
 rust-version = "1.85"
+repository = "https://github.com/darious/synoptic"
 
 [workspace.dependencies]
 anyhow = "1"

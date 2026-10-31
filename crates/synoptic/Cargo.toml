@@ -1,14 +1,15 @@
 [package]
-name = "ss-ui"
-description = "GTK4 desktop UI implementing design/handoff (Surveillance Station Client redesign)"
+name = "synoptic"
+description = "Synoptic — GTK4 desktop client for Synology Surveillance Station"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 rust-version.workspace = true
+repository.workspace = true
 build = "build.rs"
 
 [[bin]]
-name = "surveillance"
+name = "synoptic"
 path = "src/main.rs"
 
 [dependencies]
