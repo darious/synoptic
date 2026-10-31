@@ -8,6 +8,7 @@ use crate::icons;
 use crate::pages::settings::Clamp;
 use crate::services::Services;
 use crate::state::{Change, Store};
+use crate::update_check;
 use crate::widgets::controls::{label, spacer};
 
 /// `repository` from Cargo.toml; empty when the manifest has none.
@@ -18,6 +19,14 @@ pub fn version_line() -> String {
     let (maj, min, micro, _) = gstreamer::version();
     format!(
         "v{} · GTK4 · GStreamer {maj}.{min}.{micro}",
+        env!("CARGO_PKG_VERSION")
+    )
+}
+
+/// Title of the update notice.
+pub fn notice_title_text(version: &str) -> String {
+    format!(
+        "Synoptic {version} is available (you have {})",
         env!("CARGO_PKG_VERSION")
     )
 }
@@ -77,29 +86,38 @@ pub fn build(store: &Rc<Store>, _services: &Rc<Services>) -> gtk::Widget {
     icon.set_valign(gtk::Align::Start);
     notice.append(&icon);
     let texts = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    texts.append(&label("A newer release is available", &["title"]));
-    if REPO_URL.is_empty() {
-        texts.append(&label(
-            "See the project's releases page for notes.",
-            &["t12", "muted"],
-        ));
-    } else {
-        let link = gtk::LinkButton::with_label(&format!("{REPO_URL}/releases"), "Release notes");
-        link.set_halign(gtk::Align::Start);
-        texts.append(&link);
-    }
+    let notice_title = label("A newer release is available", &["title"]);
+    notice_title.set_xalign(0.0);
+    texts.append(&notice_title);
+    let link = gtk::LinkButton::with_label(&format!("{REPO_URL}/releases"), "Release notes");
+    link.set_halign(gtk::Align::Start);
+    link.set_widget_name("about-release-link");
+    texts.append(&link);
     notice.append(&texts);
     notice.append(&spacer());
     let dismiss = icons::flat_button("close", "icon-28", "Dismiss");
     dismiss.set_valign(gtk::Align::Start);
+    dismiss.set_widget_name("about-dismiss-update");
     {
         let store = store.clone();
-        dismiss.connect_clicked(move |_| {
-            store.update(Change::UpdateNotice, |s| s.update_notice_unread = false);
-        });
+        dismiss.connect_clicked(move |_| update_check::dismiss(&store));
     }
     notice.append(&dismiss);
-    notice.set_visible(store.get().update_notice_unread);
+    notice.set_widget_name("about-update-notice");
+    // The notice only ever shows what the release check found (see
+    // `update_check`): version in the title, the release page as the link.
+    let show_notice = {
+        let notice = notice.clone();
+        move |unread: bool| {
+            let release = update_check::latest();
+            if let Some(r) = &release {
+                notice_title.set_text(&notice_title_text(&r.version));
+                link.set_uri(&r.url);
+            }
+            notice.set_visible(unread && release.is_some());
+        }
+    };
+    show_notice(store.get().update_notice_unread);
     column.append(&notice);
 
     // info rows
@@ -145,7 +163,7 @@ pub fn build(store: &Rc<Store>, _services: &Rc<Services>) -> gtk::Widget {
                 return;
             };
             match c {
-                Change::UpdateNotice => notice.set_visible(store.get().update_notice_unread),
+                Change::UpdateNotice => show_notice(store.get().update_notice_unread),
                 Change::Connection => {
                     nas.set_text(&connection_text(store.get().connection.as_ref()));
                 }
@@ -165,6 +183,13 @@ pub fn build(store: &Rc<Store>, _services: &Rc<Services>) -> gtk::Widget {
 mod tests {
     use super::*;
     use crate::state::Connection;
+
+    #[test]
+    fn notice_names_both_versions() {
+        let t = notice_title_text("9.9.9");
+        assert!(t.starts_with("Synoptic 9.9.9 is available"));
+        assert!(t.contains(env!("CARGO_PKG_VERSION")));
+    }
 
     #[test]
     fn connection_row() {

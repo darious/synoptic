@@ -358,18 +358,21 @@ pub fn open(parent: &impl IsA<gtk::Window>, store: &Rc<Store>, services: &Rc<Ser
     let profile = gtk::DropDown::from_strings(&items);
     form.append(&field("Profile", &profile));
     let name_entry = gtk::Entry::new();
+    name_entry.set_widget_name("login-profile-name");
     name_entry.set_placeholder_text(Some("e.g. home-nas"));
     let name_field = field("Profile name", &name_entry);
     form.append(&name_field);
 
     let host_port = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let host = gtk::Entry::new();
+    host.set_widget_name("login-host");
     host.set_placeholder_text(Some("192.168.1.100 or nas.local"));
     host.set_hexpand(true);
     let host_field = field("Host", &host);
     host_field.set_hexpand(true);
     host_port.append(&host_field);
     let port = gtk::Entry::new();
+    port.set_widget_name("login-port");
     port.set_width_request(100);
     port.set_input_purpose(gtk::InputPurpose::Digits);
     port.set_max_length(5);
@@ -377,6 +380,7 @@ pub fn open(parent: &impl IsA<gtk::Window>, store: &Rc<Store>, services: &Rc<Ser
     form.append(&host_port);
 
     let https = gtk::CheckButton::with_label("Use HTTPS");
+    https.set_widget_name("login-https");
     https.set_active(true);
     form.append(&https);
     let verify = gtk::CheckButton::with_label("Verify SSL certificate");
@@ -384,8 +388,10 @@ pub fn open(parent: &impl IsA<gtk::Window>, store: &Rc<Store>, services: &Rc<Ser
     form.append(&divider_h());
 
     let username = gtk::Entry::new();
+    username.set_widget_name("login-user");
     form.append(&field("Username", &username));
     let password = gtk::PasswordEntry::new();
+    password.set_widget_name("login-password");
     password.set_show_peek_icon(true);
     form.append(&field("Password", &password));
     let remember = gtk::CheckButton::with_label("Remember credentials in system keyring");
@@ -403,6 +409,7 @@ pub fn open(parent: &impl IsA<gtk::Window>, store: &Rc<Store>, services: &Rc<Ser
     otp_text.set_wrap(true);
     otp.append(&otp_text);
     let code = gtk::Entry::new();
+    code.set_widget_name("login-otp");
     code.add_css_class("otp-entry");
     code.set_max_length(6);
     code.set_input_purpose(gtk::InputPurpose::Digits);
@@ -423,7 +430,9 @@ pub fn open(parent: &impl IsA<gtk::Window>, store: &Rc<Store>, services: &Rc<Ser
     dialog.body.append(&stack);
 
     let cancel = gtk::Button::with_label("Cancel");
+    cancel.set_widget_name("login-cancel");
     let connect = gtk::Button::with_label("Connect");
+    connect.set_widget_name("login-connect");
     connect.add_css_class("primary");
     dialog.set_footer(&[&cancel, &connect]);
 

@@ -27,7 +27,8 @@ use ss_stream::{
     Speed, TungsteniteConnector,
 };
 
-use super::pipeline::{Codec, Pipeline, PipelineEvent};
+use super::audio::AudioTrack; // --- audio ---
+use super::pipeline::{AudioFormat, Codec, Pipeline, PipelineEvent};
 
 /// What the slot needs from the session to open a stream.
 #[derive(Clone, Debug)]
@@ -120,6 +121,9 @@ pub enum StreamEvent {
     Offline(String),
     /// History only: wall-clock position reached, unix milliseconds.
     Position(i64),
+    /// History only: the server's close notice — the recording ran out
+    /// (or DSM ended the session); the slot decides what plays next.
+    Ended,
 }
 
 enum Msg {
@@ -127,6 +131,9 @@ enum Msg {
     Connected,
     Codec(ss_stream::VideoCodec),
     Video(Vec<u8>, Option<u64>),
+    /// --- audio --- one decodable audio frame (ADTS AAC or raw µ-law).
+    Audio(AudioFormat, Vec<u8>),
+    Close,
     Disconnected(String),
     GaveUp(String),
     Stopped,
@@ -150,6 +157,8 @@ struct Inner {
     pending: RefCell<Vec<Cmd>>,
     on_event: Box<dyn Fn(StreamEvent)>,
     dead: Cell<bool>,
+    /// --- audio --- slot's mute state, re-applied to every rebuilt pipeline.
+    muted: Cell<bool>,
 }
 
 impl Inner {
@@ -194,7 +203,8 @@ impl Inner {
             }
         });
         match built {
-            Ok(p) => {
+            Ok(mut p) => {
+                p.set_mute(self.muted.get()); // --- audio ---
                 if let Some(paintable) = p.paintable() {
                     self.emit(StreamEvent::Paintable(paintable));
                 }
@@ -248,6 +258,7 @@ impl VideoStream {
             pending: RefCell::new(Vec::new()),
             on_event: Box::new(on_event),
             dead: Cell::new(false),
+            muted: Cell::new(true), // --- audio ---
         });
         inner.rebuild_pipeline(initial_codec);
 
@@ -292,7 +303,15 @@ impl VideoStream {
         self.inner.send(Cmd::Reverse(reverse));
     }
 
+    /// Mute/unmute local playback (the `volume` element); history
+    /// sessions also get the in-band `mute=`.
     pub fn set_mute(&self, mute: bool) {
+        // --- audio ---
+        self.inner.muted.set(mute);
+        if let Some(p) = &mut *self.inner.pipeline.borrow_mut() {
+            p.set_mute(mute);
+        }
+        // --- end audio ---
         self.inner.send(Cmd::Mute(mute));
     }
 
@@ -333,7 +352,22 @@ async fn pump(
         handle.abort();
         return;
     }
+    let mut audio = AudioTrack::new(); // --- audio ---
     while let Some(event) = events.recv().await {
+        // --- audio --- codec-info and audio frames feed the track; the
+        // decodable frames it yields go to the pipeline's audio appsrc.
+        if let Event::Frame(frame) = &event {
+            let frames = audio.feed(frame);
+            if let Some(format) = audio.format() {
+                for f in frames {
+                    if tx.send(Msg::Audio(format, f)).await.is_err() {
+                        handle.abort();
+                        return;
+                    }
+                }
+            }
+        }
+        // --- end audio ---
         let msg = match event {
             Event::Connected { .. } => Msg::Connected,
             Event::Frame(frame) => match frame.kind() {
@@ -341,6 +375,7 @@ async fn pump(
                 FrameKind::CodecInfo {
                     video: Some(codec), ..
                 } => Msg::Codec(codec),
+                FrameKind::Close => Msg::Close,
                 _ => continue,
             },
             Event::Disconnected(why) => Msg::Disconnected(describe_disconnect(&why)),
@@ -399,6 +434,21 @@ async fn receive(inner: Weak<Inner>, rx: async_channel::Receiver<Msg>) {
                     inner.emit(StreamEvent::Position(
                         recording.start_time * 1000 + ms as i64,
                     ));
+                }
+            }
+            // --- audio ---
+            Msg::Audio(format, frame) => {
+                if let Some(p) = &mut *inner.pipeline.borrow_mut()
+                    && let Err(e) = p.push_audio(format, frame)
+                    && e != gstreamer::FlowError::Flushing
+                {
+                    tracing::debug!("audio appsrc push: {e:?}");
+                }
+            }
+            // --- end audio ---
+            Msg::Close => {
+                if matches!(&*inner.source.borrow(), StreamSource::History { .. }) {
+                    inner.emit(StreamEvent::Ended);
                 }
             }
             Msg::Disconnected(why) => inner.emit(StreamEvent::Reconnecting(why)),
@@ -502,6 +552,45 @@ pub fn pick_recording(recs: &[HistoryRecording], target_secs: i64) -> Option<His
         .cloned()
 }
 
+/// The recording to continue with after `current` ends: the earliest one
+/// starting at or after its end (1 s slack for back-to-back files),
+/// skipping `current` itself.
+pub fn pick_next(
+    recs: &[HistoryRecording],
+    current: &HistoryRecording,
+) -> Option<HistoryRecording> {
+    recs.iter()
+        .filter(|r| r.id != current.id && r.start_time >= current.stop_time - 1)
+        .filter(|r| r.stop_time > r.start_time)
+        .min_by_key(|r| (r.start_time, r.id))
+        .cloned()
+}
+
+/// `Recording.List` after `current` for one camera, then [`pick_next`].
+pub async fn find_next_recording(
+    client: ss_api::Client,
+    camera_id: i64,
+    current: HistoryRecording,
+) -> Option<HistoryRecording> {
+    let filter = ss_api::RecordingFilter::camera(camera_id)
+        .between(
+            current.stop_time - 5,
+            current.stop_time + RECORDING_LOOKUP_BEFORE,
+        )
+        .page(0, 500);
+    match client.list_recordings(&filter).await {
+        Ok(page) => {
+            let recs: Vec<HistoryRecording> =
+                page.items.iter().map(HistoryRecording::from_api).collect();
+            pick_next(&recs, &current)
+        }
+        Err(e) => {
+            tracing::warn!("next recording for camera {camera_id}: {e}");
+            None
+        }
+    }
+}
+
 /// `Recording.List` around `target_secs` for one camera, then [`pick_recording`].
 pub async fn find_recording(
     client: ss_api::Client,
@@ -551,6 +640,22 @@ mod tests {
         assert_eq!(pick_recording(&recs, 700).map(|r| r.id), Some(3));
         assert_eq!(pick_recording(&recs, 50).map(|r| r.id), Some(1));
         assert_eq!(pick_recording(&[], 50), None);
+    }
+
+    #[test]
+    fn next_recording_skips_the_current_and_earlier_files() {
+        let recs = [
+            rec(1, 100, 200),
+            rec(2, 200, 300),
+            rec(3, 500, 600),
+            rec(4, 150, 160),
+        ];
+        assert_eq!(pick_next(&recs, &rec(1, 100, 200)).map(|r| r.id), Some(2));
+        // a gap: the next file's start, not the end of the current one
+        assert_eq!(pick_next(&recs, &rec(2, 200, 300)).map(|r| r.id), Some(3));
+        assert_eq!(pick_next(&recs, &rec(3, 500, 600)), None);
+        // the current file is never its own successor
+        assert_eq!(pick_next(&[rec(9, 10, 20)], &rec(9, 10, 20)), None);
     }
 
     #[test]

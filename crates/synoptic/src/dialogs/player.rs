@@ -1,5 +1,5 @@
-//! Player dialog (`min(1100px, 90%)`): header title + mono subtitle, Dewarp
-//! toggle, Download, ✕; 16:9 video via GStreamer `playbin3` →
+//! Player dialog (`min(1100px, 90%)`): header title + mono subtitle,
+//! Download, ✕; 16:9 video via GStreamer `playbin3` →
 //! `gtk4paintablesink` playing `Client::recording_stream_url`; transport
 //! row with play/pause, mono position, seek bar, duration, Volume, Snapshot.
 
@@ -20,7 +20,7 @@ use crate::pages::browse::{
 };
 use crate::services::Services;
 use crate::state::Store;
-use crate::widgets::controls::{label, set_class};
+use crate::widgets::controls::label;
 
 /// Dialog width for a parent window: `min(1100, 90 %)`.
 pub fn dialog_width(parent_width: i32) -> i32 {
@@ -294,14 +294,13 @@ pub fn open(
     transport.append(&snap_btn);
     dialog.body.append(&transport);
 
-    // ----- header buttons (Dewarp, Download) before ✕ --------------------
-    let dewarp = icons::bordered_button("panorama_horizontal", "icon-32", "Dewarp");
+    // ----- header button (Download) before ✕ ----------------------------
     let download = icons::bordered_button("download", "icon-32", "Download");
+    download.set_widget_name("player-download");
     if let Some(header) = dialog.body.prev_sibling().and_downcast::<gtk::Box>() {
         header.add_css_class("h44");
         if let Some(spacer) = header.last_child().and_then(|c| c.prev_sibling()) {
             header.insert_child_after(&download, Some(&spacer));
-            header.insert_child_after(&dewarp, Some(&spacer));
         }
     }
 
@@ -415,15 +414,6 @@ pub fn open(
     {
         let p = player.clone();
         snap_btn.connect_clicked(move |_| p.snapshot());
-    }
-    {
-        let store = store.clone();
-        let dewarp_w = dewarp.clone();
-        dewarp.connect_clicked(move |_| {
-            let on = !dewarp_w.has_css_class("on");
-            set_class(&dewarp_w, "on", on);
-            store.toast("Dewarp is not implemented yet");
-        });
     }
     {
         let store = store.clone();

@@ -24,6 +24,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
 
     // 2. panel toggle
     let panel_toggle = icons::flat_button("left_panel_close", "icon-32", "Hide camera panel");
+    panel_toggle.set_widget_name("panel-toggle");
     {
         let store = store.clone();
         panel_toggle.connect_clicked(move |_| {
@@ -35,6 +36,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
     // 3. Home Mode
     let home_mode = icon_label_button("home", 18, "Home mode");
     home_mode.add_css_class("home-mode");
+    home_mode.set_widget_name("home-mode");
     {
         let store = store.clone();
         home_mode.connect_clicked(move |_| {
@@ -64,10 +66,13 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
     let live_controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let layout_button = gtk::MenuButton::new();
     layout_button.add_css_class("icon-32");
+    layout_button.set_widget_name("layout-menu");
     layout_button.set_valign(gtk::Align::Center);
     let layout_content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     layout_content.append(&icons::image("grid_view", 18));
     let layout_label = gtk::Label::new(Some("2x2"));
+    layout_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    layout_label.set_max_width_chars(22);
     layout_content.append(&layout_label);
     layout_content.append(&icons::image("expand_more", 16));
     layout_button.set_child(Some(&layout_content));
@@ -75,6 +80,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
     live_controls.append(&layout_button);
 
     let reload = icons::bordered_button("refresh", "icon-32", "Reload streams");
+    reload.set_widget_name("reload");
     {
         let store = store.clone();
         reload.connect_clicked(move |_| {
@@ -85,6 +91,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
     live_controls.append(&reload);
 
     let timeline = icons::bordered_button("view_timeline", "icon-32", "Toggle timeline");
+    timeline.set_widget_name("timeline-toggle");
     {
         let store = store.clone();
         timeline.connect_clicked(move |_| {
@@ -100,6 +107,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
     // 8. bell with badge
     let bell_button = gtk::MenuButton::new();
     bell_button.add_css_class("flat");
+    bell_button.set_widget_name("bell");
     bell_button.add_css_class("icon-32");
     bell_button.set_valign(gtk::Align::Center);
     let bell_overlay = gtk::Overlay::new();
@@ -116,6 +124,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
 
     // 9. theme toggle
     let theme_button = icons::flat_button("light_mode", "icon-32", "Switch theme");
+    theme_button.set_widget_name("theme");
     {
         let store = store.clone();
         theme_button.connect_clicked(move |_| {
@@ -132,6 +141,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
     // 10. avatar / Login
     let avatar = gtk::MenuButton::new();
     avatar.add_css_class("avatar");
+    avatar.set_widget_name("avatar");
     avatar.set_valign(gtk::Align::Center);
     let initials = gtk::Label::new(Some("??"));
     avatar.set_child(Some(&initials));
@@ -140,6 +150,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
 
     let login = gtk::Button::with_label("Login");
     login.add_css_class("primary");
+    login.set_widget_name("login");
     login.set_valign(gtk::Align::Center);
     login.set_size_request(-1, 32);
     {
@@ -179,7 +190,10 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
                 },
             );
             live_controls.set_visible(logged_in && s.page == Page::Live);
-            layout_label.set_text(s.layout.key());
+            layout_label.set_text(&match s.layout() {
+                Some(l) => format!("{} · {}", l.name, l.shape.key()),
+                None => s.shape().key().to_string(),
+            });
             set_class(&timeline, "on", s.timeline_visible);
             bell_button.set_visible(logged_in);
             badge.set_visible(s.unread_notifications > 0);
@@ -209,6 +223,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
                 | Change::PanelVisible
                 | Change::HomeMode
                 | Change::Layout
+                | Change::Slots
                 | Change::TimelineVisible
                 | Change::Notifications
                 | Change::Theme

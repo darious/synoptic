@@ -1,0 +1,32 @@
+[package]
+name = "fake-nas"
+description = "Offline stand-in for a Synology Surveillance Station NAS: DSM Web API + MixStream WebSocket on localhost"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "fake-nas"
+path = "src/main.rs"
+
+[dependencies]
+axum.workspace = true
+base64.workspace = true
+bytes.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+ss-api = { path = "../ss-api" }
+ss-stream = { path = "../ss-stream" }

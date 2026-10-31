@@ -250,6 +250,20 @@ fn row(ctx: &Rc<Browse>, ev: &EventRow) -> gtk::Widget {
     }
     row.append(&play_btn);
 
+    // open the Live page with the timeline at the event
+    let timeline_btn =
+        icons::bordered_button("view_timeline", "icon-34", "Show on the Live View timeline");
+    timeline_btn.add_css_class("row-actions");
+    timeline_btn.set_widget_name("ev-timeline");
+    {
+        let store = ctx.store.clone();
+        let (start, camera_id) = (ev.start, ev.camera_id);
+        timeline_btn.connect_clicked(move |_| {
+            store.emit(&crate::state::Change::RequestSeek(start, camera_id));
+        });
+    }
+    row.append(&timeline_btn);
+
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_PRIMARY);
     {

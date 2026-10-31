@@ -642,6 +642,45 @@ async fn recording_list_params_and_parsing() {
 }
 
 #[tokio::test]
+async fn recording_list_all_pages_until_total() {
+    let server = MockServer::start().await;
+    // page 1: 200 items (offset 0), page 2: 50 items (offset 200), total 250
+    let item = |id: i64| {
+        json!({"id": id, "cameraId": 3, "startTime": 1000 + id, "stopTime": 1100 + id,
+               "type": 1, "mountId": 0, "archId": 0})
+    };
+    let first: Vec<_> = (0..200).map(item).collect();
+    let second: Vec<_> = (200..250).map(item).collect();
+    Mock::given(method("GET"))
+        .and(query_param("api", "SYNO.SurveillanceStation.Recording"))
+        .and(query_param("method", "List"))
+        .and(query_param("cameraIds", "3"))
+        .and(query_param("offset", "0"))
+        .and(query_param("limit", "200"))
+        .respond_with(ok(json!({"events": first, "total": 250})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(query_param("api", "SYNO.SurveillanceStation.Recording"))
+        .and(query_param("method", "List"))
+        .and(query_param("offset", "200"))
+        .and(query_param("limit", "200"))
+        .respond_with(ok(json!({"events": second, "total": 250})))
+        .mount(&server)
+        .await;
+    let filter = RecordingFilter::camera(3).between(0, 5000).page(0, 50);
+    let all = logged_in(&server)
+        .list_recordings_all(&filter)
+        .await
+        .unwrap();
+    assert_eq!(all.len(), 250);
+    assert_eq!(all.first().map(|r| r.id), Some(0));
+    assert_eq!(all.last().map(|r| r.id), Some(249));
+    // exactly two requests: the small requested page size was raised to 200
+    assert_eq!(requests(&server).await.len(), 2);
+}
+
+#[tokio::test]
 async fn recording_download_streams_bytes_with_v6() {
     let server = server_with_info().await;
     let body: Vec<u8> = (0..5000u32).map(|i| (i % 251) as u8).collect();

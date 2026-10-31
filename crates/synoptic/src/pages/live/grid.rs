@@ -1,5 +1,5 @@
-//! The n×n Live View grid: slots on black with 1 px gutters, selection,
-//! per-layout camera memory (from `AppState.slots_by_layout`), and the
+//! The Live View grid: slots on black with 1 px gutters laid out by the
+//! active layout's [`Shape`] (spanning cells for `1+n`), selection, and the
 //! playback controller the timeline drives (pause / speed / seek / go live).
 
 use std::cell::{Cell, RefCell};
@@ -12,7 +12,7 @@ use ss_stream::Speed;
 
 use super::slot::{Slot, Status};
 use crate::services::Services;
-use crate::state::{Change, Layout, Store};
+use crate::state::{Change, Shape, Store};
 
 /// Speed dropdown entries (label, multiplier), ¼× … 16×.
 pub const SPEEDS: [(&str, f64); 7] = [
@@ -49,7 +49,7 @@ pub struct Grid {
     store: Rc<Store>,
     services: Rc<Services>,
     slots: RefCell<Vec<Rc<Slot>>>,
-    layout: Cell<Option<Layout>>,
+    shape: Cell<Option<Shape>>,
     paused: Cell<bool>,
     speed_index: Cell<usize>,
     listeners: RefCell<Vec<Rc<dyn Fn()>>>,
@@ -71,7 +71,7 @@ impl Grid {
             store: store.clone(),
             services: services.clone(),
             slots: RefCell::new(Vec::new()),
-            layout: Cell::new(None),
+            shape: Cell::new(None),
             paused: Cell::new(false),
             speed_index: Cell::new(SPEED_NORMAL),
             listeners: RefCell::new(Vec::new()),
@@ -180,26 +180,18 @@ impl Grid {
 
     // --- playback control ----------------------------------------------------
 
-    /// Slots a seek applies to: the selected one, else every filled slot.
+    /// Slots a seek applies to: every filled slot. The grid shares one
+    /// timeline, so every camera shows the same moment.
     fn targets(&self) -> Vec<Rc<Slot>> {
-        let slots = self.slots.borrow();
-        match self
-            .store
-            .get()
-            .selected_slot
-            .and_then(|i| slots.get(i).cloned())
+        self.slots
+            .borrow()
+            .iter()
             .filter(|s| s.camera_id().is_some())
-        {
-            Some(s) => vec![s],
-            None => slots
-                .iter()
-                .filter(|s| s.camera_id().is_some())
-                .cloned()
-                .collect(),
-        }
+            .cloned()
+            .collect()
     }
 
-    /// Seek to wall-clock `target_secs` → History mode.
+    /// Seek every filled slot to wall-clock `target_secs` → History mode.
     pub fn seek(&self, target_secs: i64) {
         let speed = self.speed();
         let paused = self.paused.get();
@@ -244,10 +236,10 @@ impl Grid {
     // --- store → widgets -----------------------------------------------------
 
     fn sync(&self) {
-        let (layout, slot_ids, cameras, selected, logged_in) = {
+        let (shape, slot_ids, cameras, selected, logged_in) = {
             let s = self.store.get();
             (
-                s.layout,
+                s.shape(),
                 s.slots(),
                 s.cameras.clone(),
                 s.selected_slot,
@@ -255,9 +247,9 @@ impl Grid {
             )
         };
 
-        if self.layout.get() != Some(layout) {
-            self.rebuild_slots(layout);
-            self.layout.set(Some(layout));
+        if self.shape.get() != Some(shape) {
+            self.rebuild_slots(shape);
+            self.shape.set(Some(shape));
         }
 
         let slots = self.slots.borrow();
@@ -282,54 +274,48 @@ impl Grid {
         self.notify();
     }
 
-    fn rebuild_slots(&self, layout: Layout) {
+    fn rebuild_slots(&self, shape: Shape) {
         let old = std::mem::take(&mut *self.slots.borrow_mut());
         for slot in &old {
             self.widget.remove(slot.widget());
         }
         drop(old);
-        let n = layout.n();
-        let mut slots = Vec::with_capacity(layout.slots());
-        for i in 0..layout.slots() {
+        let mut slots = Vec::with_capacity(shape.slots());
+        for i in 0..shape.slots() {
             let slot = Slot::new(i, &self.store, &self.services);
-            let (col, row) = cell_for(i, n);
-            self.widget.attach(slot.widget(), col, row, 1, 1);
+            let cell = shape.cell(i);
+            self.widget.attach(
+                slot.widget(),
+                cell.col,
+                cell.row,
+                cell.colspan,
+                cell.rowspan,
+            );
             slots.push(slot);
         }
         *self.slots.borrow_mut() = slots;
     }
 
-    /// `RequestOpenSingle`: 1×1 with this camera.
+    /// `RequestOpenSingle`: switch to (or create) a 1×1 layout with this camera.
     fn open_single(&self, camera_id: i64) {
-        self.store.update(Change::Slots, |s| {
-            s.slots_by_layout.insert(Layout::L1, vec![camera_id]);
+        self.store.update(Change::Layout, |s| {
+            match s.layouts.iter().position(|l| l.shape == Shape::S1x1) {
+                Some(i) => s.activate_layout(i),
+                None => {
+                    s.add_layout("", Shape::S1x1, false);
+                }
+            }
+            s.place_camera(0, camera_id);
             s.selected_slot = None;
         });
-        self.store.update(Change::Layout, |s| s.layout = Layout::L1);
+        self.store.emit(&Change::Slots);
         self.store.emit(&Change::SelectedSlot);
     }
-}
-
-/// Grid cell (column, row) of slot `index` in an `n`×`n` layout, row-major.
-pub fn cell_for(index: usize, n: usize) -> (i32, i32) {
-    let n = n.max(1);
-    ((index % n) as i32, (index / n) as i32)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn cells_are_row_major() {
-        assert_eq!(cell_for(0, 1), (0, 0));
-        assert_eq!(cell_for(0, 2), (0, 0));
-        assert_eq!(cell_for(1, 2), (1, 0));
-        assert_eq!(cell_for(2, 2), (0, 1));
-        assert_eq!(cell_for(3, 2), (1, 1));
-        assert_eq!(cell_for(5, 3), (2, 1));
-        assert_eq!(cell_for(15, 4), (3, 3));
-    }
 
     #[test]
     fn speeds_are_sorted_and_contain_normal() {

@@ -1,7 +1,10 @@
-//! 240 px collapsible camera panel.
+//! 240 px collapsible camera panel. Rows are in the profile's saved
+//! order (`AppState::ordered_cameras`); drag a row onto another row to
+//! reorder, or onto a Live View slot to place the camera there.
 
 use std::rc::Rc;
 
+use gtk::gdk;
 use gtk::glib;
 use gtk::prelude::*;
 use ss_api::CameraStatus;
@@ -106,6 +109,7 @@ pub fn build(store: &Rc<Store>) -> gtk::Revealer {
 
             if s.page.is_browse() {
                 let all = row_button("select_all", "All cameras");
+                all.set_widget_name("camera-all");
                 set_class(&all, "active-filter", s.filter_camera.is_none());
                 let store2 = store.clone();
                 all.connect_clicked(move |_| {
@@ -114,10 +118,11 @@ pub fn build(store: &Rc<Store>) -> gtk::Revealer {
                 list.append(&all);
             }
 
-            for cam in &s.cameras {
+            for cam in s.ordered_cameras() {
                 let online = cam.status == CameraStatus::Enabled;
                 let row = gtk::Button::new();
                 row.add_css_class("camera-row");
+                row.set_widget_name(&format!("camera-{}", cam.id));
                 set_class(&row, "offline", !online);
                 let in_layout = s.slot_of(cam.id);
                 set_class(
@@ -130,6 +135,7 @@ pub fn build(store: &Rc<Store>) -> gtk::Revealer {
                     "active-filter",
                     s.page.is_browse() && s.filter_camera == Some(cam.id),
                 );
+                install_dnd(&row, &store, cam.id);
 
                 let h = gtk::Box::new(gtk::Orientation::Horizontal, 8);
                 h.append(&dot(&[
@@ -152,6 +158,7 @@ pub fn build(store: &Rc<Store>) -> gtk::Revealer {
                     h.append(&b);
                 }
                 let tune = icons::flat_button("tune", "icon-24", "Camera settings");
+                tune.set_widget_name(&format!("camera-tune-{}", cam.id));
                 {
                     let store2 = store.clone();
                     let id = cam.id;
@@ -181,6 +188,7 @@ pub fn build(store: &Rc<Store>) -> gtk::Revealer {
             if !s.page.is_browse() {
                 list.append(&divider_h());
                 let empty_slot = row_button("crop_square", "Empty slot");
+                empty_slot.set_widget_name("camera-empty");
                 empty_slot.add_css_class("muted");
                 let store2 = store.clone();
                 empty_slot.connect_clicked(move |_| on_camera_clicked(&store2, 0));
@@ -197,6 +205,7 @@ pub fn build(store: &Rc<Store>) -> gtk::Revealer {
             Change::PanelVisible => revealer.set_reveal_child(store2.get().panel_visible),
             Change::Connection
             | Change::Cameras
+            | Change::CameraOrder
             | Change::Page
             | Change::Layout
             | Change::Slots
@@ -223,9 +232,9 @@ fn row_button(material: &str, text: &str) -> gtk::Button {
 /// Live View: put the camera (0 = empty) into the selected slot, or the first
 /// free slot. Browse pages: set the camera filter.
 fn on_camera_clicked(store: &Rc<Store>, camera_id: i64) {
-    let (is_browse, selected, slots, layout) = {
+    let (is_browse, selected, slots) = {
         let s = store.get();
-        (s.page.is_browse(), s.selected_slot, s.slots(), s.layout)
+        (s.page.is_browse(), s.selected_slot, s.slots())
     };
     if is_browse {
         store.update(Change::FilterCamera, |s| s.filter_camera = Some(camera_id));
@@ -237,18 +246,87 @@ fn on_camera_clicked(store: &Rc<Store>, camera_id: i64) {
         return;
     };
     store.update(Change::Slots, |s| {
-        let mut v = slots.clone();
-        // a camera lives in one slot at a time
-        if camera_id != 0 {
-            for c in v.iter_mut() {
-                if *c == camera_id {
-                    *c = 0;
-                }
-            }
-        }
-        v[target] = camera_id;
-        s.slots_by_layout.insert(layout, v);
+        s.place_camera(target, camera_id);
         s.selected_slot = None;
     });
     store.emit(&Change::SelectedSlot);
+}
+
+/// Drag source (the camera id as an `i64`, accepted by slots and by other
+/// rows) and drop target (reorder: above or below this row by pointer y).
+fn install_dnd(row: &gtk::Button, store: &Rc<Store>, camera_id: i64) {
+    let drag = gtk::DragSource::new();
+    drag.set_actions(gdk::DragAction::MOVE);
+    {
+        let row = row.clone();
+        drag.connect_prepare(move |src, _, _| {
+            src.set_icon(Some(&gtk::WidgetPaintable::new(Some(&row))), 0, 0);
+            Some(gdk::ContentProvider::for_value(&camera_id.to_value()))
+        });
+    }
+    {
+        let row = row.clone();
+        drag.connect_drag_begin(move |_, _| row.add_css_class("dragging"));
+    }
+    {
+        let row = row.clone();
+        drag.connect_drag_end(move |_, _, _| row.remove_css_class("dragging"));
+    }
+    row.add_controller(drag);
+
+    let drop = gtk::DropTarget::new(i64::static_type(), gdk::DragAction::MOVE);
+    let mark = |row: &gtk::Button, y: f64| {
+        let above = y < f64::from(row.height()) / 2.0;
+        set_class(row, "drop-above", above);
+        set_class(row, "drop-below", !above);
+    };
+    {
+        let row = row.clone();
+        drop.connect_enter(move |_, _, y| {
+            mark(&row, y);
+            gdk::DragAction::MOVE
+        });
+    }
+    {
+        let row = row.clone();
+        drop.connect_motion(move |_, _, y| {
+            mark(&row, y);
+            gdk::DragAction::MOVE
+        });
+    }
+    {
+        let row = row.clone();
+        drop.connect_leave(move |_| {
+            row.remove_css_class("drop-above");
+            row.remove_css_class("drop-below");
+        });
+    }
+    {
+        let row = row.clone();
+        let store = store.clone();
+        drop.connect_drop(move |_, value, _, y| {
+            row.remove_css_class("drop-above");
+            row.remove_css_class("drop-below");
+            let Ok(dragged) = value.get::<i64>() else {
+                return false;
+            };
+            if dragged == camera_id {
+                return true;
+            }
+            let above = y < f64::from(row.height()) / 2.0;
+            let before = if above {
+                Some(camera_id)
+            } else {
+                // the camera after this row, if any
+                let s = store.get();
+                let ids: Vec<i64> = s.ordered_cameras().iter().map(|c| c.id).collect();
+                ids.iter()
+                    .position(|&c| c == camera_id)
+                    .and_then(|i| ids.get(i + 1).copied())
+            };
+            store.update(Change::CameraOrder, |s| s.move_camera(dragged, before));
+            true
+        });
+    }
+    row.add_controller(drop);
 }

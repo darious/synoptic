@@ -11,6 +11,8 @@ repository = "https://github.com/darious/synoptic"
 
 [workspace.dependencies]
 anyhow = "1"
+axum = { version = "0.8", features = ["ws"] }
+base64 = "0.22"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "process", "fs", "net"] }
 tokio-util = { version = "0.7", features = ["codec"] }

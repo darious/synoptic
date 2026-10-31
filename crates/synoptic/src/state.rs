@@ -7,7 +7,6 @@
 //! `ss_config::AppConfig` and saved (debounced) through `ss_config::save`.
 
 use std::cell::{Cell, Ref, RefCell, RefMut};
-use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use gtk::glib;
@@ -103,54 +102,325 @@ pub enum Theme {
     Light,
 }
 
-/// Live View grid size.
+/// Live View grid shape: `rows x cols` presets plus the two Synology
+/// "one big + small" shapes. Keys match `ss_config::LAYOUT_SHAPES`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Layout {
-    L1,
-    L2,
-    L3,
-    L4,
+pub enum Shape {
+    S1x1,
+    S1x2,
+    S2x1,
+    S2x2,
+    S2x3,
+    S3x2,
+    S3x3,
+    S3x4,
+    S4x3,
+    S4x4,
+    /// 3×3 grid, slot 0 spans the top-left 2×2.
+    Big1p5,
+    /// 4×4 grid, slot 0 spans the top-left 3×3.
+    Big1p7,
 }
 
-impl Layout {
-    pub const ALL: [Layout; 4] = [Layout::L1, Layout::L2, Layout::L3, Layout::L4];
+/// A cell in the `gtk::Grid`: column, row, column span, row span.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GridCell {
+    pub col: i32,
+    pub row: i32,
+    pub colspan: i32,
+    pub rowspan: i32,
+}
 
-    /// Grid side length.
-    pub fn n(self) -> usize {
-        match self {
-            Layout::L1 => 1,
-            Layout::L2 => 2,
-            Layout::L3 => 3,
-            Layout::L4 => 4,
-        }
-    }
+impl Shape {
+    pub const ALL: [Shape; 12] = [
+        Shape::S1x1,
+        Shape::S1x2,
+        Shape::S2x1,
+        Shape::S2x2,
+        Shape::S2x3,
+        Shape::S3x2,
+        Shape::S3x3,
+        Shape::S3x4,
+        Shape::S4x3,
+        Shape::S4x4,
+        Shape::Big1p5,
+        Shape::Big1p7,
+    ];
 
-    pub fn slots(self) -> usize {
-        self.n() * self.n()
-    }
-
-    /// `"2x2"` — also the `config.toml` key.
+    /// `"2x3"`, `"1+5"` — also the `config.toml` key.
     pub fn key(self) -> &'static str {
         match self {
-            Layout::L1 => "1x1",
-            Layout::L2 => "2x2",
-            Layout::L3 => "3x3",
-            Layout::L4 => "4x4",
+            Shape::S1x1 => "1x1",
+            Shape::S1x2 => "1x2",
+            Shape::S2x1 => "2x1",
+            Shape::S2x2 => "2x2",
+            Shape::S2x3 => "2x3",
+            Shape::S3x2 => "3x2",
+            Shape::S3x3 => "3x3",
+            Shape::S3x4 => "3x4",
+            Shape::S4x3 => "4x3",
+            Shape::S4x4 => "4x4",
+            Shape::Big1p5 => "1+5",
+            Shape::Big1p7 => "1+7",
         }
     }
 
-    pub fn from_key(key: &str) -> Option<Layout> {
-        Layout::ALL.into_iter().find(|l| l.key() == key)
+    pub fn from_key(key: &str) -> Option<Shape> {
+        Shape::ALL.into_iter().find(|l| l.key() == key)
     }
 
+    /// Grid rows and columns (the big shapes are 3×3 and 4×4 grids).
+    pub fn dims(self) -> (usize, usize) {
+        match self {
+            Shape::S1x1 => (1, 1),
+            Shape::S1x2 => (1, 2),
+            Shape::S2x1 => (2, 1),
+            Shape::S2x2 => (2, 2),
+            Shape::S2x3 => (2, 3),
+            Shape::S3x2 => (3, 2),
+            Shape::S3x3 | Shape::Big1p5 => (3, 3),
+            Shape::S3x4 => (3, 4),
+            Shape::S4x3 => (4, 3),
+            Shape::S4x4 | Shape::Big1p7 => (4, 4),
+        }
+    }
+
+    pub fn rows(self) -> usize {
+        self.dims().0
+    }
+
+    pub fn cols(self) -> usize {
+        self.dims().1
+    }
+
+    /// Number of slots.
+    pub fn slots(self) -> usize {
+        match self {
+            Shape::Big1p5 => 6,
+            Shape::Big1p7 => 8,
+            _ => self.rows() * self.cols(),
+        }
+    }
+
+    /// Side of the big cell in a `1+n` shape (0 for plain grids).
+    fn big(self) -> usize {
+        match self {
+            Shape::Big1p5 => 2,
+            Shape::Big1p7 => 3,
+            _ => 0,
+        }
+    }
+
+    /// Grid cell of slot `index` (row-major for plain grids; for `1+n`
+    /// slot 0 is the big cell, then the right column top→bottom, then the
+    /// bottom row left→right).
+    pub fn cell(self, index: usize) -> GridCell {
+        let (rows, cols) = self.dims();
+        let big = self.big();
+        if big == 0 {
+            let cols = cols.max(1);
+            return GridCell {
+                col: (index % cols) as i32,
+                row: (index / cols) as i32,
+                colspan: 1,
+                rowspan: 1,
+            };
+        }
+        if index == 0 {
+            return GridCell {
+                col: 0,
+                row: 0,
+                colspan: big as i32,
+                rowspan: big as i32,
+            };
+        }
+        let i = index - 1;
+        let (col, row) = if i < rows {
+            (cols - 1, i)
+        } else {
+            (i - rows, rows - 1)
+        };
+        GridCell {
+            col: col as i32,
+            row: row as i32,
+            colspan: 1,
+            rowspan: 1,
+        }
+    }
+
+    /// Material icon used in menus.
     pub fn icon(self) -> &'static str {
         match self {
-            Layout::L1 => "crop_square",
-            Layout::L2 => "grid_view",
-            Layout::L3 => "apps",
-            Layout::L4 => "view_comfy",
+            Shape::S1x1 => "crop_square",
+            Shape::S1x2 | Shape::S2x1 | Shape::S2x2 => "grid_view",
+            Shape::S2x3 | Shape::S3x2 | Shape::S3x3 => "apps",
+            Shape::Big1p5 | Shape::Big1p7 => "open_in_full",
+            _ => "view_comfy",
         }
     }
+
+    /// Default shape for `n` cameras: 2×3 up to six, else 3×3.
+    pub fn default_for(camera_count: usize) -> Shape {
+        if camera_count <= 6 {
+            Shape::S2x3
+        } else {
+            Shape::S3x3
+        }
+    }
+}
+
+/// One saved Live View layout.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LayoutDef {
+    pub name: String,
+    pub shape: Shape,
+    /// Camera id per slot (0 = empty), exactly `shape.slots()` long.
+    pub cameras: Vec<i64>,
+}
+
+impl LayoutDef {
+    pub fn new(name: impl Into<String>, shape: Shape) -> LayoutDef {
+        LayoutDef {
+            name: name.into(),
+            shape,
+            cameras: vec![0; shape.slots()],
+        }
+    }
+
+    /// Change the shape, keeping cameras in slot order (truncate or pad).
+    pub fn set_shape(&mut self, shape: Shape) {
+        self.shape = shape;
+        self.cameras.resize(shape.slots(), 0);
+    }
+
+    pub fn filled(&self) -> usize {
+        self.cameras.iter().filter(|&&c| c != 0).count()
+    }
+
+    /// Fill empty slots with `cameras` (in order) that are not placed yet.
+    pub fn auto_fill(&mut self, cameras: &[i64]) {
+        let placed = self.cameras.clone();
+        let mut fresh = cameras.iter().filter(|c| !placed.contains(c));
+        for slot in self.cameras.iter_mut() {
+            if *slot != 0 {
+                continue;
+            }
+            match fresh.next() {
+                Some(&c) => *slot = c,
+                None => break,
+            }
+        }
+    }
+
+    fn from_config(l: &ss_config::LayoutDef) -> Option<LayoutDef> {
+        let shape = Shape::from_key(&l.shape)?;
+        let mut cameras: Vec<i64> = l.cameras.iter().map(|&c| i64::from(c)).collect();
+        cameras.resize(shape.slots(), 0);
+        Some(LayoutDef {
+            name: l.name.clone(),
+            shape,
+            cameras,
+        })
+    }
+
+    fn to_config(&self) -> ss_config::LayoutDef {
+        ss_config::LayoutDef::new(
+            self.name.clone(),
+            self.shape.key(),
+            self.cameras
+                .iter()
+                .map(|&c| u32::try_from(c).unwrap_or(0))
+                .collect(),
+        )
+    }
+}
+
+/// Order `ids` by `order` (ids missing from `order` follow, in their own
+/// order). Returns indices into `ids`.
+pub fn order_indices(ids: &[i64], order: &[i64]) -> Vec<usize> {
+    let mut out: Vec<usize> = Vec::with_capacity(ids.len());
+    for o in order {
+        if let Some(i) = ids.iter().position(|id| id == o)
+            && !out.contains(&i)
+        {
+            out.push(i);
+        }
+    }
+    for i in 0..ids.len() {
+        if !out.contains(&i) {
+            out.push(i);
+        }
+    }
+    out
+}
+
+/// Move `id` in `order` so it sits before `before` (`None` = at the end).
+/// `all` supplies ids not yet in `order`, so a never-reordered list has a
+/// well-defined position for everything.
+pub fn move_before(order: &mut Vec<i64>, all: &[i64], id: i64, before: Option<i64>) {
+    let mut full: Vec<i64> = order_indices(all, order)
+        .into_iter()
+        .map(|i| all[i])
+        .collect();
+    for &o in order.iter() {
+        if !full.contains(&o) {
+            full.push(o);
+        }
+    }
+    full.retain(|&c| c != id);
+    let at = before
+        .and_then(|b| full.iter().position(|&c| c == b))
+        .unwrap_or(full.len());
+    full.insert(at, id);
+    *order = full;
+}
+
+/// A profile's layouts, active index and camera order from the config,
+/// migrating the legacy `layout_cameras` / `session.grid_layout` pair and
+/// creating a "Default" layout (2×3 up to six cameras, else 3×3, filled in
+/// panel order) when there is none.
+pub fn profile_layouts(
+    config: &mut ss_config::AppConfig,
+    profile: &str,
+    cameras: &[Camera],
+) -> (Vec<LayoutDef>, usize, Vec<i64>) {
+    let grid_layout = config.session.grid_layout.clone();
+    let state = config.profiles.get_mut(profile).map(|p| &mut p.state);
+    let (mut layouts, active_name, order): (Vec<LayoutDef>, String, Vec<i64>) = match state {
+        Some(st) => {
+            if st.migrate_layouts(&grid_layout) {
+                tracing::info!(profile, "migrated layout_cameras into named layouts");
+            }
+            (
+                st.layouts
+                    .iter()
+                    .filter_map(LayoutDef::from_config)
+                    .collect(),
+                st.active_layout.clone(),
+                st.camera_order.iter().map(|&c| i64::from(c)).collect(),
+            )
+        }
+        None => (Vec::new(), String::new(), Vec::new()),
+    };
+    if layouts.is_empty() {
+        let ids: Vec<i64> = cameras.iter().map(|c| c.id).collect();
+        let ids: Vec<i64> = order_indices(&ids, &order)
+            .into_iter()
+            .map(|i| ids[i])
+            .collect();
+        let enabled = cameras
+            .iter()
+            .filter(|c| c.status == ss_api::CameraStatus::Enabled)
+            .count();
+        let mut l = LayoutDef::new("Default", Shape::default_for(enabled.max(ids.len().min(6))));
+        l.auto_fill(&ids);
+        layouts.push(l);
+    }
+    let active = layouts
+        .iter()
+        .position(|l| l.name == active_name)
+        .unwrap_or(0);
+    (layouts, active, order)
 }
 
 /// The NAS we are logged in to.
@@ -173,9 +443,13 @@ pub struct AppState {
     pub timeline_visible: bool,
     pub connection: Option<Connection>,
     pub cameras: Vec<Camera>,
-    pub layout: Layout,
-    /// Camera id per slot (0 = empty), per layout.
-    pub slots_by_layout: BTreeMap<Layout, Vec<i64>>,
+    /// Saved layouts of the current profile, in menu order (never empty
+    /// while logged in).
+    pub layouts: Vec<LayoutDef>,
+    /// Index into `layouts`.
+    pub active_layout: usize,
+    /// Camera panel order (camera ids); cameras not listed follow in NAS order.
+    pub camera_order: Vec<i64>,
     pub selected_slot: Option<usize>,
     pub home_mode: bool,
     pub unread_notifications: u32,
@@ -192,19 +466,192 @@ impl AppState {
         self.connection.is_some()
     }
 
+    /// The active layout, if any.
+    pub fn layout(&self) -> Option<&LayoutDef> {
+        self.layouts.get(self.active_layout)
+    }
+
+    pub fn layout_mut(&mut self) -> Option<&mut LayoutDef> {
+        self.layouts.get_mut(self.active_layout)
+    }
+
+    /// Shape of the active layout (2×2 when there is none yet).
+    pub fn shape(&self) -> Shape {
+        self.layout().map(|l| l.shape).unwrap_or(Shape::S2x2)
+    }
+
+    /// Camera id per slot of the active layout, `shape().slots()` long.
     pub fn slots(&self) -> Vec<i64> {
-        let mut v = self
-            .slots_by_layout
-            .get(&self.layout)
-            .cloned()
-            .unwrap_or_default();
-        v.resize(self.layout.slots(), 0);
+        let mut v = self.layout().map(|l| l.cameras.clone()).unwrap_or_default();
+        v.resize(self.shape().slots(), 0);
         v
     }
 
     /// Slot index (0-based) holding `camera_id` in the current layout.
     pub fn slot_of(&self, camera_id: i64) -> Option<usize> {
         self.slots().iter().position(|&c| c == camera_id)
+    }
+
+    /// Put `camera_id` (0 = empty) into `slot`; a camera lives in one slot
+    /// at a time, so its previous slot becomes empty. Creates the layout
+    /// when none exists. Returns false when `slot` is out of range.
+    pub fn place_camera(&mut self, slot: usize, camera_id: i64) -> bool {
+        self.ensure_layout();
+        let Some(l) = self.layout_mut() else {
+            return false;
+        };
+        if slot >= l.cameras.len() {
+            return false;
+        }
+        if camera_id != 0 {
+            for c in l.cameras.iter_mut() {
+                if *c == camera_id {
+                    *c = 0;
+                }
+            }
+        }
+        l.cameras[slot] = camera_id;
+        true
+    }
+
+    /// Swap the contents of two slots of the active layout.
+    pub fn swap_slots(&mut self, a: usize, b: usize) -> bool {
+        let Some(l) = self.layout_mut() else {
+            return false;
+        };
+        if a >= l.cameras.len() || b >= l.cameras.len() {
+            return false;
+        }
+        l.cameras.swap(a, b);
+        true
+    }
+
+    /// Change the active layout's shape, keeping cameras in slot order.
+    pub fn set_shape(&mut self, shape: Shape) {
+        self.ensure_layout();
+        if let Some(l) = self.layout_mut() {
+            l.set_shape(shape);
+        }
+        self.selected_slot = None;
+    }
+
+    /// Add a layout after the active one and make it active. The name is
+    /// made unique (`name 2`, …). Empty slots are auto-filled in panel order.
+    pub fn add_layout(&mut self, name: &str, shape: Shape, auto_fill: bool) -> usize {
+        let name = self.unique_layout_name(name.trim(), shape);
+        let mut l = LayoutDef::new(name, shape);
+        if auto_fill {
+            let ids: Vec<i64> = self.ordered_cameras().iter().map(|c| c.id).collect();
+            l.auto_fill(&ids);
+        }
+        let at = (self.active_layout + 1).min(self.layouts.len());
+        self.layouts.insert(at, l);
+        self.active_layout = at;
+        self.selected_slot = None;
+        at
+    }
+
+    /// Copy the active layout (`<name> copy`) after it and make it active.
+    pub fn duplicate_layout(&mut self) -> Option<usize> {
+        let src = self.layout()?.clone();
+        let name = self.unique_layout_name(&format!("{} copy", src.name), src.shape);
+        let at = self.active_layout + 1;
+        self.layouts.insert(
+            at,
+            LayoutDef {
+                name,
+                shape: src.shape,
+                cameras: src.cameras,
+            },
+        );
+        self.active_layout = at;
+        self.selected_slot = None;
+        Some(at)
+    }
+
+    /// Delete the active layout; refused when it is the last one.
+    pub fn delete_layout(&mut self) -> bool {
+        if self.layouts.len() <= 1 || self.active_layout >= self.layouts.len() {
+            return false;
+        }
+        self.layouts.remove(self.active_layout);
+        self.active_layout = self.active_layout.min(self.layouts.len() - 1);
+        self.selected_slot = None;
+        true
+    }
+
+    pub fn rename_layout(&mut self, name: &str) -> bool {
+        let name = name.trim();
+        if name.is_empty() {
+            return false;
+        }
+        let taken = self
+            .layouts
+            .iter()
+            .enumerate()
+            .any(|(i, l)| i != self.active_layout && l.name == name);
+        if taken {
+            return false;
+        }
+        match self.layout_mut() {
+            Some(l) => {
+                l.name = name.to_string();
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Empty every slot of the active layout.
+    pub fn clear_slots(&mut self) {
+        if let Some(l) = self.layout_mut() {
+            l.cameras.iter_mut().for_each(|c| *c = 0);
+        }
+        self.selected_slot = None;
+    }
+
+    /// Switch to layout `index` (clamped).
+    pub fn activate_layout(&mut self, index: usize) {
+        if !self.layouts.is_empty() {
+            self.active_layout = index.min(self.layouts.len() - 1);
+        }
+        self.selected_slot = None;
+    }
+
+    fn ensure_layout(&mut self) {
+        if self.layouts.is_empty() {
+            let n = self.cameras.len();
+            self.layouts
+                .push(LayoutDef::new("Default", Shape::default_for(n)));
+            self.active_layout = 0;
+        }
+    }
+
+    fn unique_layout_name(&self, name: &str, shape: Shape) -> String {
+        let base = if name.is_empty() { shape.key() } else { name };
+        let mut candidate = base.to_string();
+        let mut n = 2;
+        while self.layouts.iter().any(|l| l.name == candidate) {
+            candidate = format!("{base} {n}");
+            n += 1;
+        }
+        candidate
+    }
+
+    /// Cameras in panel order: `camera_order` first, the rest in NAS order.
+    pub fn ordered_cameras(&self) -> Vec<&Camera> {
+        let ids: Vec<i64> = self.cameras.iter().map(|c| c.id).collect();
+        order_indices(&ids, &self.camera_order)
+            .into_iter()
+            .map(|i| &self.cameras[i])
+            .collect()
+    }
+
+    /// Move camera `id` before camera `before` (`None` = to the end) in the
+    /// panel order.
+    pub fn move_camera(&mut self, id: i64, before: Option<i64>) {
+        let all: Vec<i64> = self.cameras.iter().map(|c| c.id).collect();
+        move_before(&mut self.camera_order, &all, id, before);
     }
 
     pub fn camera(&self, id: i64) -> Option<&Camera> {
@@ -228,8 +675,12 @@ pub enum Change {
     TimelineVisible,
     Connection,
     Cameras,
+    /// Active layout, its shape, or the layout list changed.
     Layout,
+    /// Cameras in the active layout's slots changed.
     Slots,
+    /// Camera panel order changed.
+    CameraOrder,
     SelectedSlot,
     HomeMode,
     Notifications,
@@ -249,6 +700,9 @@ pub enum Change {
     RequestReload,
     /// Live View: open camera in a 1×1 standalone view.
     RequestOpenSingle(i64),
+    /// Live View: show the timeline at `(unix seconds, camera id)` and
+    /// seek every slot there (from the Events page).
+    RequestSeek(i64, i64),
 }
 
 type Listener = Box<dyn Fn(&Change)>;
@@ -280,16 +734,7 @@ impl Store {
             ss_config::Theme::Light => Theme::Light,
             _ => Theme::Dark,
         };
-        let layout = Layout::from_key(&config.session.grid_layout).unwrap_or(Layout::L2);
         let page = Page::from_key(&config.session.last_page).unwrap_or(Page::Live);
-        let mut slots_by_layout = BTreeMap::new();
-        if let Some(profile) = config.default_profile() {
-            for (key, cams) in &profile.state.layout_cameras {
-                if let Some(l) = Layout::from_key(key) {
-                    slots_by_layout.insert(l, cams.iter().map(|&c| c as i64).collect());
-                }
-            }
-        }
 
         let state = AppState {
             page,
@@ -298,8 +743,9 @@ impl Store {
             timeline_visible: config.general.timeline_visible,
             connection: None,
             cameras: Vec::new(),
-            layout,
-            slots_by_layout,
+            layouts: Vec::new(),
+            active_layout: 0,
+            camera_order: Vec::new(),
             selected_slot: None,
             home_mode: false,
             unread_notifications: 0,
@@ -383,19 +829,29 @@ impl Store {
             Change::PanelVisible => c.general.sidebar_visible = s.panel_visible,
             Change::TimelineVisible => c.general.timeline_visible = s.timeline_visible,
             Change::Page => c.session.last_page = s.page.key().to_string(),
-            Change::Layout => c.session.grid_layout = s.layout.key().to_string(),
-            Change::Slots => {
+            Change::Layout | Change::Slots | Change::CameraOrder => {
+                c.session.grid_layout = s.shape().key().to_string();
                 let name = s
                     .connection
                     .as_ref()
                     .map(|c| c.profile.clone())
                     .unwrap_or_else(|| c.general.default_profile.clone());
                 if let Some(p) = c.profiles.get_mut(&name) {
-                    for (layout, cams) in &s.slots_by_layout {
-                        p.state.layout_cameras.insert(
-                            layout.key().to_string(),
-                            cams.iter().map(|&c| c.max(0) as u32).collect(),
-                        );
+                    p.state.layouts = s.layouts.iter().map(LayoutDef::to_config).collect();
+                    p.state.active_layout = s.layout().map(|l| l.name.clone()).unwrap_or_default();
+                    p.state.camera_order = s
+                        .camera_order
+                        .iter()
+                        .filter_map(|&c| u32::try_from(c).ok())
+                        .collect();
+                    // keep the reference client's square layouts in step
+                    for l in &s.layouts {
+                        if ss_config::GRID_LAYOUTS.contains(&l.shape.key()) {
+                            p.state.layout_cameras.insert(
+                                l.shape.key().to_string(),
+                                l.cameras.iter().map(|&c| c.max(0) as u32).collect(),
+                            );
+                        }
                     }
                 }
             }
@@ -435,4 +891,217 @@ impl Store {
 
 thread_local! {
     static PENDING: RefCell<Vec<*const Store>> = const { RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ss_api::{CameraStatus, VideoCodec};
+
+    fn cam(id: i64) -> Camera {
+        Camera {
+            id,
+            name: format!("Cam {id}"),
+            model: String::new(),
+            vendor: String::new(),
+            status: CameraStatus::Enabled,
+            is_ptz: false,
+            has_audio: false,
+            has_speaker: false,
+            def_live_profile: None,
+            video_codec: VideoCodec::H264,
+        }
+    }
+
+    fn state(n_cams: usize) -> AppState {
+        AppState {
+            page: Page::Live,
+            theme: Theme::Dark,
+            panel_visible: true,
+            timeline_visible: true,
+            connection: None,
+            cameras: (1..=n_cams as i64).map(cam).collect(),
+            layouts: Vec::new(),
+            active_layout: 0,
+            camera_order: Vec::new(),
+            selected_slot: None,
+            home_mode: false,
+            unread_notifications: 0,
+            update_notice_unread: false,
+            filter_camera: None,
+            rail_labels: false,
+            density_compact: false,
+        }
+    }
+
+    fn c(col: i32, row: i32, colspan: i32, rowspan: i32) -> GridCell {
+        GridCell {
+            col,
+            row,
+            colspan,
+            rowspan,
+        }
+    }
+
+    #[test]
+    fn keys_round_trip_and_match_config() {
+        for shape in Shape::ALL {
+            assert_eq!(Shape::from_key(shape.key()), Some(shape));
+            assert_eq!(
+                ss_config::shape_slots(shape.key()),
+                Some(shape.slots()),
+                "{}",
+                shape.key()
+            );
+        }
+        assert_eq!(Shape::from_key("5x5"), None);
+        assert_eq!(ss_config::LAYOUT_SHAPES.len(), Shape::ALL.len());
+    }
+
+    #[test]
+    fn plain_grids_are_row_major_single_cells() {
+        assert_eq!(Shape::S1x1.cell(0), c(0, 0, 1, 1));
+        assert_eq!(Shape::S2x3.dims(), (2, 3));
+        assert_eq!(Shape::S2x3.slots(), 6);
+        assert_eq!(Shape::S2x3.cell(2), c(2, 0, 1, 1));
+        assert_eq!(Shape::S2x3.cell(3), c(0, 1, 1, 1));
+        assert_eq!(Shape::S3x2.cell(2), c(0, 1, 1, 1));
+        assert_eq!(Shape::S3x2.cell(5), c(1, 2, 1, 1));
+        assert_eq!(Shape::S4x3.cell(11), c(2, 3, 1, 1));
+        assert_eq!(Shape::S3x4.cell(11), c(3, 2, 1, 1));
+        assert_eq!(Shape::S4x4.cell(15), c(3, 3, 1, 1));
+    }
+
+    #[test]
+    fn big_shapes_span_and_cover_the_grid_exactly_once() {
+        assert_eq!(Shape::Big1p5.cell(0), c(0, 0, 2, 2));
+        assert_eq!(Shape::Big1p5.cell(1), c(2, 0, 1, 1));
+        assert_eq!(Shape::Big1p5.cell(3), c(2, 2, 1, 1));
+        assert_eq!(Shape::Big1p5.cell(4), c(0, 2, 1, 1));
+        assert_eq!(Shape::Big1p5.cell(5), c(1, 2, 1, 1));
+        assert_eq!(Shape::Big1p7.cell(0), c(0, 0, 3, 3));
+        assert_eq!(Shape::Big1p7.cell(4), c(3, 3, 1, 1));
+        assert_eq!(Shape::Big1p7.cell(7), c(2, 3, 1, 1));
+        for shape in Shape::ALL {
+            let (rows, cols) = shape.dims();
+            let mut covered = vec![false; rows * cols];
+            for i in 0..shape.slots() {
+                let cell = shape.cell(i);
+                for r in cell.row..cell.row + cell.rowspan {
+                    for col in cell.col..cell.col + cell.colspan {
+                        let k = r as usize * cols + col as usize;
+                        assert!(!covered[k], "{} slot {i} overlaps", shape.key());
+                        covered[k] = true;
+                    }
+                }
+            }
+            assert!(covered.iter().all(|&x| x), "{} leaves a hole", shape.key());
+        }
+    }
+
+    #[test]
+    fn set_shape_keeps_slot_order() {
+        let mut l = LayoutDef::new("x", Shape::S2x2);
+        l.cameras = vec![1, 2, 3, 4];
+        l.set_shape(Shape::S2x3);
+        assert_eq!(l.cameras, vec![1, 2, 3, 4, 0, 0]);
+        l.set_shape(Shape::S1x2);
+        assert_eq!(l.cameras, vec![1, 2]);
+        l.auto_fill(&[2, 3, 4]);
+        assert_eq!(l.cameras, vec![1, 2]);
+        l.set_shape(Shape::Big1p5);
+        l.auto_fill(&[2, 3, 4]);
+        assert_eq!(l.cameras, vec![1, 2, 3, 4, 0, 0]);
+        assert_eq!(l.filled(), 4);
+    }
+
+    #[test]
+    fn ordering_puts_unknown_cameras_last_in_nas_order() {
+        assert_eq!(order_indices(&[1, 2, 3, 4], &[]), vec![0, 1, 2, 3]);
+        assert_eq!(
+            order_indices(&[1, 2, 3, 4], &[3, 9, 1, 3]),
+            vec![2, 0, 1, 3]
+        );
+        let mut order = Vec::new();
+        move_before(&mut order, &[1, 2, 3, 4], 4, Some(2));
+        assert_eq!(order, vec![1, 4, 2, 3]);
+        move_before(&mut order, &[1, 2, 3, 4], 1, None);
+        assert_eq!(order, vec![4, 2, 3, 1]);
+        move_before(&mut order, &[1, 2, 3, 4], 1, Some(1));
+        assert_eq!(order, vec![4, 2, 3, 1]);
+    }
+
+    #[test]
+    fn app_state_places_swaps_and_orders() {
+        let mut s = state(6);
+        assert_eq!(s.shape(), Shape::S2x2, "no layouts yet");
+        assert!(s.place_camera(1, 3));
+        assert_eq!(s.shape(), Shape::S2x3, "default created for 6 cameras");
+        assert_eq!(s.slot_of(3), Some(1));
+        assert!(s.place_camera(4, 3));
+        assert_eq!(s.slots(), vec![0, 0, 0, 0, 3, 0]);
+        assert!(!s.place_camera(6, 1));
+        assert!(s.place_camera(0, 1));
+        assert!(s.swap_slots(0, 4));
+        assert_eq!(s.slots()[0], 3);
+        assert_eq!(s.slots()[4], 1);
+        s.move_camera(5, Some(1));
+        let ids: Vec<i64> = s.ordered_cameras().iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![5, 1, 2, 3, 4, 6]);
+        let at = s.add_layout("", Shape::Big1p5, true);
+        assert_eq!(at, 1);
+        assert_eq!(s.layout().unwrap().name, "1+5");
+        assert_eq!(
+            s.slots(),
+            vec![5, 1, 2, 3, 4, 6],
+            "auto-filled in panel order"
+        );
+        assert!(!s.rename_layout("Default"), "names are unique");
+        assert!(s.rename_layout("Front"));
+        s.duplicate_layout();
+        assert_eq!(s.layout().unwrap().name, "Front copy");
+        assert_eq!(s.layouts.len(), 3);
+        assert!(s.delete_layout());
+        assert_eq!(s.active_layout, 1);
+        s.set_shape(Shape::S1x1);
+        assert_eq!(s.slots(), vec![5]);
+        s.clear_slots();
+        assert_eq!(s.slots(), vec![0]);
+        s.activate_layout(0);
+        assert!(s.delete_layout());
+        assert!(!s.delete_layout(), "the last layout stays");
+    }
+
+    #[test]
+    fn profile_layouts_create_a_default_and_migrate() {
+        let cams: Vec<Camera> = (1..=7).map(cam).collect();
+        let mut config = ss_config::AppConfig::default();
+        config.add_profile("nas", ss_config::Profile::new("h"));
+        let (layouts, active, order) = profile_layouts(&mut config, "nas", &cams);
+        assert_eq!(layouts.len(), 1);
+        assert_eq!(layouts[0].shape, Shape::S3x3);
+        assert_eq!(layouts[0].cameras, vec![1, 2, 3, 4, 5, 6, 7, 0, 0]);
+        assert_eq!(active, 0);
+        assert!(order.is_empty());
+        let (layouts, ..) = profile_layouts(&mut config, "nas", &cams[..6]);
+        assert_eq!(layouts[0].shape, Shape::S2x3);
+
+        config.session.grid_layout = "3x3".into();
+        let p = config.profiles.get_mut("nas").unwrap();
+        p.state
+            .layout_cameras
+            .insert("2x2".into(), vec![1, 2, 3, 4]);
+        p.state.layout_cameras.insert("3x3".into(), vec![7]);
+        p.state.camera_order = vec![7, 1];
+        let (layouts, active, order) = profile_layouts(&mut config, "nas", &cams);
+        assert_eq!(layouts.len(), 2);
+        assert_eq!(active, 1);
+        assert_eq!(layouts[1].cameras.len(), 9);
+        assert_eq!(order, vec![7, 1]);
+        assert_eq!(
+            config.profiles["nas"].state.layouts.len(),
+            2,
+            "migration written back"
+        );
+    }
 }

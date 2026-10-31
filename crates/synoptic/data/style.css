@@ -160,6 +160,16 @@ popover > arrow { background-color: var(--panel); border-color: var(--border); }
 .menu-row:hover { background-color: var(--surface); }
 .menu-row.current { background-color: var(--blue-tint); }
 .menu-row.danger { color: var(--danger); }
+.menu-row:disabled { opacity: 0.4; }
+/* layout menu: shape picker miniatures */
+.layout-menu button.shape {
+  min-width: 36px; min-height: 40px; padding: 3px 2px;
+  border: 1px solid transparent; border-radius: 4px; background-color: transparent;
+  color: var(--muted);
+}
+.layout-menu button.shape:hover { background-color: var(--surface); color: var(--text); }
+.layout-menu button.shape.current { background-color: var(--blue-tint); border-color: var(--blue); color: var(--blue); }
+.layout-menu button.shape label { font-size: 10px; }
 
 /* ---------- header (48px) ---------- */
 .header {
@@ -226,6 +236,9 @@ popover > arrow { background-color: var(--panel); border-color: var(--border); }
 .camera-row:hover { background-color: var(--surface); }
 .camera-row.in-layout, .camera-row.active-filter { background-color: var(--blue-tint); }
 .camera-row.offline { opacity: 0.55; }
+.camera-row.dragging { opacity: 0.4; }
+.camera-row.drop-above { box-shadow: inset 0 2px 0 0 var(--blue); }
+.camera-row.drop-below { box-shadow: inset 0 -2px 0 0 var(--blue); }
 .camera-row .name { font-size: 13px; font-weight: 600; }
 .camera-row .model { font-size: 11px; color: var(--muted); }
 .status-dot { min-width: 8px; min-height: 8px; border-radius: 50%; }

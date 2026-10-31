@@ -681,3 +681,124 @@ fn removing_the_default_profile_moves_the_default() {
     assert_eq!(cfg.general.default_profile, "");
     assert!(cfg.default_profile().is_none());
 }
+
+#[test]
+fn named_layouts_and_camera_order_round_trip_per_profile() {
+    use ss_config::LayoutDef;
+    let mut cfg = AppConfig::default();
+    cfg.add_profile("home", Profile::new("nas"));
+    let p = cfg.profiles.get_mut("home").unwrap();
+    p.state.layouts = vec![
+        LayoutDef::new("Default", "2x3", vec![1, 2, 3, 4, 5, 6]),
+        LayoutDef::new("Front", "1+5", vec![3, 0, 0, 0, 0, 0]),
+    ];
+    p.state.active_layout = "Front".into();
+    p.state.camera_order = vec![3, 1, 2];
+    let text = cfg.to_toml_string().unwrap();
+    assert!(text.contains("[[profiles.home.layouts]]"), "{text}");
+    let out = table(&text);
+    let home = out["profiles"]["home"].as_table().unwrap();
+    assert_eq!(home["active_layout"], Value::from("Front"));
+    assert_eq!(
+        home["camera_order"],
+        Value::Array(vec![Value::from(3), Value::from(1), Value::from(2)])
+    );
+    let loaded = parse(&text);
+    assert_eq!(loaded, cfg);
+    assert_eq!(loaded.profiles["home"].state.layouts[1].shape, "1+5");
+    // nothing written for a profile without layouts
+    let mut bare = AppConfig::default();
+    bare.add_profile("x", Profile::new("nas"));
+    let out = table(&bare.to_toml_string().unwrap());
+    let x = out["profiles"]["x"].as_table().unwrap();
+    assert!(!x.contains_key("layouts"));
+    assert!(!x.contains_key("camera_order"));
+    assert!(!x.contains_key("active_layout"));
+}
+
+#[test]
+fn layouts_are_read_leniently() {
+    let text = r#"
+[profiles.home]
+host = "a"
+camera_order = [2, "3", 1.0, "junk"]
+[[profiles.home.layouts]]
+name = "Hall"
+shape = "3x2"
+cameras = [1, 0, 2]
+[[profiles.home.layouts]]
+shape = "4x4"
+[[profiles.home.layouts]]
+name = "bad shape"
+shape = "5x5"
+[[profiles.home.layouts]]
+name = "no shape"
+"#;
+    let st = &parse(text).profiles["home"].state;
+    assert_eq!(st.camera_order, vec![2, 3, 1]);
+    assert_eq!(st.layouts.len(), 2);
+    assert_eq!(st.layouts[0].name, "Hall");
+    assert_eq!(st.layouts[0].cameras, vec![1, 0, 2]);
+    assert_eq!(st.layouts[1].name, "4x4", "name defaults to the shape");
+    assert!(st.layouts[1].cameras.is_empty());
+}
+
+#[test]
+fn legacy_layout_cameras_migrate_once_into_layouts() {
+    let text = r#"
+[general]
+default_profile = "home"
+[session]
+grid_layout = "3x3"
+[profiles.home]
+host = "a"
+layout_cameras = { "2x2" = [1, 2, 0, 0], "3x3" = [5, 0], "4x4" = [0, 0] }
+"#;
+    let cfg = parse(text);
+    let mut st = cfg.profiles["home"].state.clone();
+    assert!(st.migrate_layouts(&cfg.session.grid_layout));
+    assert_eq!(st.layouts.len(), 2, "the all-empty 4x4 is skipped");
+    assert_eq!(st.layouts[0].name, "2x2");
+    assert_eq!(st.layouts[0].cameras, vec![1, 2, 0, 0]);
+    assert_eq!(st.layouts[1].shape, "3x3");
+    assert_eq!(st.layouts[1].cameras.len(), 9, "padded to the shape");
+    assert_eq!(st.active_layout, "3x3");
+    // a second call is a no-op
+    assert!(!st.migrate_layouts("2x2"));
+    assert_eq!(st.active_layout, "3x3");
+    // nothing to migrate
+    let mut empty = ss_config::ProfileState::default();
+    assert!(!empty.migrate_layouts("2x2"));
+    assert!(empty.layouts.is_empty());
+    assert_eq!(ss_config::shape_slots("1+7"), Some(8));
+    assert_eq!(ss_config::shape_slots("5x5"), None);
+}
+
+#[test]
+fn timeline_filter_defaults_round_trip_and_reject_unknown_kinds() {
+    let cfg = AppConfig::default();
+    assert_eq!(
+        cfg.session.timeline_event_types,
+        ss_config::TIMELINE_EVENT_KINDS
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+    );
+    assert!(cfg.session.timeline_show_recordings);
+
+    // a file without the keys gets the defaults, one with them keeps them
+    let cfg = parse("[session]\ngrid_layout = \"1x1\"\n");
+    assert_eq!(cfg.session.timeline_event_types.len(), 4);
+    assert!(cfg.session.timeline_show_recordings);
+    let cfg = parse(
+        "[session]\ntimeline_event_types = [\"motion\", \"bogus\", 3]\ntimeline_show_recordings = false\n",
+    );
+    assert_eq!(cfg.session.timeline_event_types, vec!["motion".to_string()]);
+    assert!(!cfg.session.timeline_show_recordings);
+    assert!(cfg.session.extra.is_empty());
+    // an empty list (every kind hidden) survives a save
+    let mut cfg = AppConfig::default();
+    cfg.session.timeline_event_types.clear();
+    let again = parse(&cfg.to_toml_string().unwrap());
+    assert!(again.session.timeline_event_types.is_empty());
+}

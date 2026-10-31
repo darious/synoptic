@@ -17,6 +17,10 @@ pub const RECORDING_API: &str = "SYNO.SurveillanceStation.Recording";
 /// version 4 call uses an event-based parameter set for sub-ranges, see
 /// [`Client::download_recording_range`].)
 pub const RECORDING_DOWNLOAD_VERSION: u32 = 6;
+/// Smallest page [`Client::list_recordings_all`] asks for.
+pub const LIST_ALL_PAGE_MIN: u32 = 200;
+/// Most pages [`Client::list_recordings_all`] walks (× page size = cap).
+pub const LIST_ALL_MAX_PAGES: u32 = 50;
 
 /// Filters for [`Client::list_recordings`].
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -93,6 +97,34 @@ impl Client {
         let items: Vec<Recording> = decode(raw, "Recording.List")?;
         let total = total_field(&data, items.len());
         Ok(Page { items, total })
+    }
+
+    /// Every `Recording.List` entry matching `filter`, paging from
+    /// `filter.offset` in steps of `filter.limit` (at least
+    /// [`LIST_ALL_PAGE_MIN`]) until a short page, the reported `total`, or
+    /// [`LIST_ALL_MAX_PAGES`] pages. Pages a NAS answers with the same
+    /// first id twice end the walk too, so a broken `offset` cannot loop.
+    pub async fn list_recordings_all(&self, filter: &RecordingFilter) -> Result<Vec<Recording>> {
+        let limit = filter.limit.max(LIST_ALL_PAGE_MIN);
+        let mut f = filter.clone();
+        f.limit = limit;
+        let mut all: Vec<Recording> = Vec::new();
+        let mut last_first_id: Option<i64> = None;
+        for _ in 0..LIST_ALL_MAX_PAGES {
+            let page = self.list_recordings(&f).await?;
+            let n = page.items.len();
+            let first_id = page.items.first().map(|r| r.id);
+            if n == 0 || (first_id.is_some() && first_id == last_first_id) {
+                break;
+            }
+            last_first_id = first_id;
+            all.extend(page.items);
+            f.offset = f.offset.saturating_add(n as u32);
+            if (n as u32) < limit || (page.total >= 0 && i64::from(f.offset) >= page.total) {
+                break;
+            }
+        }
+        Ok(all)
     }
 
     /// `Recording.Download` v6 by recording id, streamed into `out`.

@@ -1,5 +1,7 @@
 //! Camera Settings dialog (440 w): stream protocol, direct RTSP URL, Live
-//! View stream profile, fisheye dewarp / mount / lens.
+//! View stream profile. (The reference's fisheye dewarp / mount / lens
+//! tables stay in `ss_config` for compatibility but have no UI: nothing in
+//! this client dewarps.)
 //!
 //! Values are written into the active profile's camera tables with the
 //! reference app's key names and value strings (see `ss_config::ProfileState`):
@@ -9,11 +11,11 @@
 use std::rc::Rc;
 
 use gtk::prelude::*;
-use ss_config::{DEWARP_MODES, FISHEYE_MOUNT_WALL, ProfileState, StreamProfile};
+use ss_config::{ProfileState, StreamProfile};
 
 use crate::dialogs::shell;
 use crate::state::{Change, Store};
-use crate::widgets::controls::{divider_h, label, spacer};
+use crate::widgets::controls::label;
 
 /// `(config value, label)` in dropdown order. Values are the reference's
 /// `camera_protocols` strings (`ss_config::STREAM_PROTOCOLS`).
@@ -27,19 +29,8 @@ pub const PROTOCOLS: &[(&str, &str)] = &[
     ("direct", "Direct URL"),
 ];
 
-/// `camera_dewarp` values; `""` (absent) = off.
-pub const DEWARP: &[(&str, &str)] = &[
-    ("", "Off"),
-    ("panorama", "Panorama"),
-    ("ptz", "Virtual PTZ"),
-];
-
-/// `camera_fisheye_mount` values; `ceiling` is the absent default.
-pub const MOUNTS: &[(&str, &str)] = &[("ceiling", "Ceiling"), (FISHEYE_MOUNT_WALL, "Wall")];
-
 const PROTOCOL_DEFAULT: &str = "auto";
 const PROFILE_DEFAULT: &str = "camera";
-const MOUNT_DEFAULT: &str = "ceiling";
 
 /// What the dialog edits for one camera.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,10 +38,6 @@ pub struct Values {
     pub protocol: String,
     pub direct_url: String,
     pub profile: String,
-    pub dewarp: String,
-    pub mount: String,
-    /// `"center_x,center_y,radius,fov"` or `""`; shown, not edited here.
-    pub lens: String,
 }
 
 impl Default for Values {
@@ -59,9 +46,6 @@ impl Default for Values {
             protocol: PROTOCOL_DEFAULT.into(),
             direct_url: String::new(),
             profile: PROFILE_DEFAULT.into(),
-            dewarp: String::new(),
-            mount: MOUNT_DEFAULT.into(),
-            lens: String::new(),
         }
     }
 }
@@ -89,17 +73,6 @@ impl Values {
                 &profiles,
                 PROFILE_DEFAULT,
             ),
-            dewarp: pick(state.camera_dewarp.get(&id), DEWARP_MODES, ""),
-            mount: pick(
-                state.camera_fisheye_mount.get(&id),
-                &[FISHEYE_MOUNT_WALL],
-                MOUNT_DEFAULT,
-            ),
-            lens: state
-                .camera_fisheye_lens
-                .get(&id)
-                .cloned()
-                .unwrap_or_default(),
         }
     }
 
@@ -117,8 +90,8 @@ impl Values {
         Ok(())
     }
 
-    /// Write camera `id`'s tables; defaults remove the entry. The lens is
-    /// left untouched (edited by the calibration dialog).
+    /// Write camera `id`'s tables; defaults remove the entry. The fisheye
+    /// tables are left untouched.
     pub fn write(&self, state: &mut ProfileState, id: u32) {
         set_or_remove(
             &mut state.camera_protocols,
@@ -139,13 +112,6 @@ impl Values {
             &self.profile,
             PROFILE_DEFAULT,
         );
-        set_or_remove(&mut state.camera_dewarp, id, &self.dewarp, "");
-        set_or_remove(
-            &mut state.camera_fisheye_mount,
-            id,
-            &self.mount,
-            MOUNT_DEFAULT,
-        );
     }
 }
 
@@ -159,16 +125,6 @@ fn set_or_remove(
         map.remove(&id);
     } else {
         map.insert(id, value.to_string());
-    }
-}
-
-/// `"0.5,0.5,0.48,180"` → `"0.5, 0.5, 0.48, 180°"`; the full-circle default when unset.
-pub fn lens_text(raw: &str) -> String {
-    let parts: Vec<&str> = raw.split(',').map(str::trim).collect();
-    if parts.len() == 4 && parts.iter().all(|p| p.parse::<f64>().is_ok()) {
-        format!("{}, {}, {}, {}°", parts[0], parts[1], parts[2], parts[3])
-    } else {
-        "0.5, 0.5, 0.5, 180°".to_string()
     }
 }
 
@@ -259,42 +215,6 @@ pub fn open(parent: &impl IsA<gtk::Window>, store: &Rc<Store>, id: i64) {
     let profile = dropdown(&profile_options, &values.profile);
     body.append(&row("Live View stream profile", &profile));
 
-    body.append(&divider_h());
-
-    let dewarp = dropdown(DEWARP, &values.dewarp);
-    body.append(&row("Fisheye dewarp", &dewarp));
-    let mount = dropdown(MOUNTS, &values.mount);
-    body.append(&row("Fisheye mount", &mount));
-
-    let lens_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    let lens_label = label("Fisheye lens", &["row-label"]);
-    lens_label.set_valign(gtk::Align::Center);
-    lens_row.append(&lens_label);
-    lens_row.append(&spacer());
-    let lens_value = label(&lens_text(&values.lens), &["mono", "t12", "muted"]);
-    lens_value.set_valign(gtk::Align::Center);
-    lens_row.append(&lens_value);
-    let calibrate = gtk::Button::with_label("Calibrate…");
-    calibrate.set_valign(gtk::Align::Center);
-    {
-        let store = store.clone();
-        calibrate.connect_clicked(move |_| store.toast("Lens calibration is not implemented yet"));
-    }
-    lens_row.append(&calibrate);
-    body.append(&lens_row);
-
-    let update_fisheye = {
-        let mount = mount.clone();
-        let calibrate = calibrate.clone();
-        move |d: &gtk::DropDown| {
-            let on = d.selected() != 0;
-            mount.set_sensitive(on);
-            calibrate.set_sensitive(on);
-        }
-    };
-    update_fisheye(&dewarp);
-    dewarp.connect_selected_notify(update_fisheye);
-
     let error = label("", &["error-text"]);
     error.set_wrap(true);
     error.set_visible(false);
@@ -310,15 +230,11 @@ pub fn open(parent: &impl IsA<gtk::Window>, store: &Rc<Store>, id: i64) {
     {
         let store = store.clone();
         let window = dialog.window.clone();
-        let lens = values.lens.clone();
         apply.connect_clicked(move |_| {
             let v = Values {
                 protocol: PROTOCOLS[protocol.selected() as usize].0.to_string(),
                 direct_url: url.text().trim().to_string(),
                 profile: profile_options[profile.selected() as usize].0.to_string(),
-                dewarp: DEWARP[dewarp.selected() as usize].0.to_string(),
-                mount: MOUNTS[mount.selected() as usize].0.to_string(),
-                lens: lens.clone(),
             };
             if let Err(e) = v.validate() {
                 error.set_text(&e);
@@ -360,8 +276,6 @@ mod tests {
         assert!(st.camera_protocols.is_empty());
         assert!(st.camera_overrides.is_empty());
         assert!(st.camera_live_view_stream_profiles.is_empty());
-        assert!(st.camera_dewarp.is_empty());
-        assert!(st.camera_fisheye_mount.is_empty());
     }
 
     #[test]
@@ -370,22 +284,19 @@ mod tests {
             protocol: "direct".into(),
             direct_url: " rtsp://nas/stream ".into(),
             profile: "balanced".into(),
-            dewarp: "ptz".into(),
-            mount: "wall".into(),
-            lens: String::new(),
         };
         let mut st = ProfileState::default();
+        st.camera_dewarp.insert(59, "ptz".into());
         v.write(&mut st, 59);
         assert_eq!(st.camera_protocols[&59], "direct");
         assert_eq!(st.camera_overrides[&59], "rtsp://nas/stream");
         assert_eq!(st.camera_live_view_stream_profiles[&59], "balanced");
+        // the reference's fisheye tables are preserved, not edited
         assert_eq!(st.camera_dewarp[&59], "ptz");
-        assert_eq!(st.camera_fisheye_mount[&59], "wall");
         let back = Values::read(&st, 59);
         assert_eq!(back.direct_url, "rtsp://nas/stream");
         assert_eq!(back.protocol, "direct");
-        assert_eq!(back.mount, "wall");
-        assert_eq!(back.dewarp, "ptz");
+        assert_eq!(back.profile, "balanced");
     }
 
     #[test]
@@ -406,12 +317,11 @@ mod tests {
     fn unknown_config_strings_fall_back() {
         let mut st = ProfileState::default();
         st.camera_protocols.insert(1, "carrier-pigeon".into());
-        st.camera_dewarp.insert(1, "sideways".into());
-        st.camera_fisheye_mount.insert(1, "floor".into());
+        st.camera_live_view_stream_profiles
+            .insert(1, "ultra".into());
         let v = Values::read(&st, 1);
         assert_eq!(v.protocol, "auto");
-        assert_eq!(v.dewarp, "");
-        assert_eq!(v.mount, "ceiling");
+        assert_eq!(v.profile, "camera");
     }
 
     #[test]
@@ -425,12 +335,5 @@ mod tests {
         assert!(v.validate().is_err());
         v.direct_url = "RTSP://x/live".into();
         assert!(v.validate().is_ok());
-    }
-
-    #[test]
-    fn lens_formatting() {
-        assert_eq!(lens_text("0.5,0.5,0.48,180"), "0.5, 0.5, 0.48, 180°");
-        assert_eq!(lens_text(""), "0.5, 0.5, 0.5, 180°");
-        assert_eq!(lens_text("garbage"), "0.5, 0.5, 0.5, 180°");
     }
 }

@@ -12,8 +12,13 @@ has not yet been exercised against a real NAS. Expect rough edges.
 
 ## Features
 
-- Live View grid (1×1 to 4×4) with per-layout camera memory, snapshots and a
-  recording timeline with history playback.
+- Live View: any grid from 1×1 to 4×4 (2×3, 3×2, …) plus 1+5 and 1+7 shapes,
+  several named layouts per NAS, drag and drop between the camera list and
+  slots, PTZ pad with presets, snapshots, audio.
+- Timeline under the grid: one lane per camera with recordings and
+  colour-coded motion, alarm and manual events, 5 min to 24 h zoom, pan back
+  through days, click or drag to seek every slot, event filter, date picker,
+  download, and history playback that continues across recording files.
 - Recordings, Events, Snapshots and Time Lapse browsing with filters,
   thumbnails, a player and downloads.
 - Login with OTP and trusted devices, credentials in the Secret Service
@@ -38,6 +43,17 @@ cargo run -p ss-cli -- --help        # headless test tool (login, cameras, live,
 RUST_LOG=synoptic=debug,ss_stream=debug cargo run -p synoptic   # with logs
 ```
 
+## Developing without a NAS
+
+`cargo run -p fake-nas` serves a synthetic Surveillance Station on
+`http://127.0.0.1:5000` (user `admin`, password `admin`): six cameras, two
+days of recordings with motion and alarm events, live and history video over
+the real MixStream protocol. Log Synoptic in with HTTPS off, or use the CLI.
+
+On a headless machine `tools/ui.sh` runs the app on GTK's Broadway backend and
+drives it through `crates/synoptic/src/driver.rs` (page switching, layouts,
+seeking, clicks by widget name, PNG screenshots).
+
 ## Repository layout
 
 | Path | Contents |
@@ -48,6 +64,7 @@ RUST_LOG=synoptic=debug,ss_stream=debug cargo run -p synoptic   # with logs
 | `crates/ss-play` | `FrameSink` trait and mpv/ffmpeg subprocess sinks |
 | `crates/ss-config` | profiles, settings and keyring secrets |
 | `crates/ss-cli` | `ss` command-line tool |
+| `crates/fake-nas` | offline stand-in NAS for development and tests |
 | `docs/architecture.md` | teardown of the official Windows client and the protocol notes derived from it |
 | `tools/` | stdlib-only NSIS and asar extractors used for the teardown |
 

@@ -35,6 +35,16 @@ pub fn group_title(section: &str) -> &str {
         .unwrap_or(section)
 }
 
+/// Registry sections the reference client exposes but nothing in Synoptic
+/// reads (mpv cache tuning, its POS overlay, its legacy-event switch). They
+/// stay in `config.toml` for the reference client; we do not show them.
+const HIDDEN_SECTIONS: &[&str] = &[
+    "Media player settings",
+    "Timeline settings",
+    "POS receipt overlay",
+    "Event settings",
+];
+
 /// Sections in display order: the known ones first, then anything new.
 pub fn ordered_sections() -> Vec<&'static str> {
     let mut out: Vec<&'static str> = GROUPS
@@ -47,6 +57,7 @@ pub fn ordered_sections() -> Vec<&'static str> {
             out.push(d.section);
         }
     }
+    out.retain(|s| !HIDDEN_SECTIONS.contains(s));
     out
 }
 
@@ -370,11 +381,17 @@ mod tests {
     }
 
     #[test]
-    fn every_registry_section_has_a_group() {
+    fn every_registry_section_is_shown_or_deliberately_hidden() {
         let sections = ordered_sections();
         for d in SETTINGS {
-            assert!(sections.contains(&d.section), "{}", d.section);
+            assert!(
+                sections.contains(&d.section) || HIDDEN_SECTIONS.contains(&d.section),
+                "{}",
+                d.section
+            );
         }
+        assert!(sections.contains(&"Live View settings"));
+        assert!(!sections.contains(&"Media player settings"));
         assert_eq!(group_title("Event settings"), "Events");
         assert_eq!(group_title("Brand new"), "Brand new");
     }

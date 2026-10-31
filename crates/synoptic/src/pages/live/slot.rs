@@ -11,6 +11,7 @@ use ss_api::{Camera, CameraStatus};
 use ss_stream::Speed;
 
 use crate::icons;
+use crate::pages::live::ptz;
 use crate::services::Services;
 use crate::state::{Change, Store};
 use crate::video::bridge::{
@@ -57,10 +58,23 @@ pub struct Slot {
     stream: RefCell<Option<VideoStream>>,
     /// History: last wall-clock position reported (unix ms).
     position_ms: Cell<Option<i64>>,
+    /// History: when the last video frame arrived (end-of-file watchdog).
+    last_frame_at: Cell<Option<std::time::Instant>>,
+    /// Pause state the grid asked for (history frames stop while paused).
+    paused: Cell<bool>,
+    /// A "next recording" lookup is in flight; don't start another.
+    advancing: Cell<bool>,
     /// Bumped whenever the stream is (re)started so stale async results are ignored.
     generation: Cell<u64>,
     retry: RefCell<Option<glib::SourceId>>,
 }
+
+/// History: no frame for this long while the position sits at the end of
+/// the file counts as "the recording ended" even without a close notice.
+const END_OF_FILE_SILENCE: std::time::Duration = std::time::Duration::from_millis(2500);
+/// History: a recording that stops within this many seconds of now is the
+/// one still being written; past its end the slot goes back to live.
+const LIVE_EDGE_SLACK_SECS: i64 = 120;
 
 impl Slot {
     pub fn new(index: usize, store: &Rc<Store>, services: &Rc<Services>) -> Rc<Slot> {
@@ -124,20 +138,28 @@ impl Slot {
         toolbar.set_margin_start(8);
         toolbar.set_margin_bottom(8);
         toolbar.set_visible(false);
+        toolbar.set_widget_name(&format!("slot-{index}-toolbar"));
+        // slots start muted; `load_mute` applies the per-camera config
         let mute_button = gtk::Button::new();
-        let mute_icon = icons::image("volume_up", 18);
+        let mute_icon = icons::image("volume_off", 18);
         mute_button.set_child(Some(&mute_icon));
-        mute_button.set_tooltip_text(Some("Mute"));
+        mute_button.set_tooltip_text(Some("Unmute"));
+        mute_button.set_widget_name(&format!("slot-{index}-mute"));
         let snapshot_button = icons::flat_button("photo_camera", "icon-30", "Snapshot");
+        snapshot_button.set_widget_name(&format!("slot-{index}-snapshot"));
+        // PTZ cameras only (see `relabel`): one popover holds pad, zoom,
+        // focus and presets
         let ptz_group = gtk::Box::new(gtk::Orientation::Horizontal, 2);
         ptz_group.append(&divider_v());
-        let ptz_button = icons::flat_button("control_camera", "icon-30", "PTZ pad");
-        let zoom_button = icons::flat_button("zoom_in", "icon-30", "Zoom");
-        let talk_button = icons::flat_button("mic", "icon-30", "Push-to-talk");
+        let ptz_button = gtk::MenuButton::new();
+        ptz_button.set_child(Some(&icons::image("control_camera", 18)));
+        ptz_button.add_css_class("slot-ptz");
+        ptz_button.set_tooltip_text(Some("PTZ: pan, tilt, zoom, presets"));
+        ptz_button.set_widget_name(&format!("slot-{index}-ptz"));
+        ptz_button.set_valign(gtk::Align::Center);
         ptz_group.append(&ptz_button);
-        ptz_group.append(&zoom_button);
-        ptz_group.append(&talk_button);
         let single_button = icons::flat_button("open_in_full", "icon-30", "Open in 1×1");
+        single_button.set_widget_name(&format!("slot-{index}-single"));
         toolbar.append(&mute_button);
         toolbar.append(&snapshot_button);
         toolbar.append(&ptz_group);
@@ -187,9 +209,12 @@ impl Slot {
             status: Cell::new(Status::Empty),
             selected: Cell::new(false),
             hovered: Cell::new(false),
-            muted: Cell::new(false),
+            muted: Cell::new(true),
             stream: RefCell::new(None),
             position_ms: Cell::new(None),
+            last_frame_at: Cell::new(None),
+            paused: Cell::new(false),
+            advancing: Cell::new(false),
             generation: Cell::new(0),
             retry: RefCell::new(None),
         });
@@ -253,13 +278,10 @@ impl Slot {
                 }
             });
         }
-        for (button, what) in [
-            (&ptz_button, "PTZ control"),
-            (&zoom_button, "Zoom"),
-            (&talk_button, "Push-to-talk"),
-        ] {
-            let store = store.clone();
-            button.connect_clicked(move |_| store.toast(format!("{what} not implemented")));
+        {
+            let w = Rc::downgrade(&slot);
+            let camera: ptz::CameraSource = Rc::new(move || w.upgrade().and_then(|s| s.camera()));
+            ptz_button.set_popover(Some(&ptz::popover(store, services, index, camera)));
         }
         {
             let w = Rc::downgrade(&slot);
@@ -272,6 +294,89 @@ impl Slot {
             });
         }
 
+        // --- layout DnD (owned by layouts work) ---
+        // Drag a filled slot (its index as a `u32`) onto another slot to swap;
+        // accept a camera (`i64`, from the camera panel) or a slot (`u32`);
+        // a toolbar button empties the slot.
+        {
+            use gtk::gdk;
+            let drag = gtk::DragSource::new();
+            drag.set_actions(gdk::DragAction::MOVE);
+            {
+                let w = Rc::downgrade(&slot);
+                drag.connect_prepare(move |src, _, _| {
+                    let s = w.upgrade()?;
+                    s.camera_id()?;
+                    src.set_icon(Some(&gtk::WidgetPaintable::new(Some(&s.name_pill))), 0, 0);
+                    Some(gdk::ContentProvider::for_value(
+                        &(s.index as u32).to_value(),
+                    ))
+                });
+            }
+            slot.root.add_controller(drag);
+
+            let drop = gtk::DropTarget::new(glib::Type::INVALID, gdk::DragAction::MOVE);
+            drop.set_types(&[i64::static_type(), u32::static_type()]);
+            {
+                let root = slot.root.clone();
+                drop.connect_enter(move |_, _, _| {
+                    root.add_css_class("drop-target");
+                    gdk::DragAction::MOVE
+                });
+            }
+            {
+                let root = slot.root.clone();
+                drop.connect_leave(move |_| root.remove_css_class("drop-target"));
+            }
+            {
+                let w = Rc::downgrade(&slot);
+                drop.connect_drop(move |_, value, _, _| {
+                    let Some(s) = w.upgrade() else { return false };
+                    s.root.remove_css_class("drop-target");
+                    let index = s.index;
+                    if let Ok(camera_id) = value.get::<i64>() {
+                        s.store.update(Change::Slots, |st| {
+                            st.place_camera(index, camera_id);
+                            st.selected_slot = None;
+                        });
+                    } else if let Ok(from) = value.get::<u32>() {
+                        let from = from as usize;
+                        if from == index {
+                            return true;
+                        }
+                        s.store.update(Change::Slots, |st| {
+                            st.swap_slots(from, index);
+                            st.selected_slot = None;
+                        });
+                    } else {
+                        return false;
+                    }
+                    s.store.emit(&Change::SelectedSlot);
+                    true
+                });
+            }
+            slot.root.add_controller(drop);
+
+            let remove_button = icons::flat_button("close", "icon-30", "Remove from layout");
+            remove_button.set_widget_name(&format!("slot-{index}-remove"));
+            {
+                let w = Rc::downgrade(&slot);
+                remove_button.connect_clicked(move |_| {
+                    let Some(s) = w.upgrade() else { return };
+                    let index = s.index;
+                    s.store.update(Change::Slots, |st| {
+                        st.place_camera(index, 0);
+                        st.selected_slot = None;
+                    });
+                    s.store.emit(&Change::SelectedSlot);
+                });
+            }
+            slot.toolbar.append(&divider_v());
+            slot.toolbar.append(&remove_button);
+        }
+        // --- end layout DnD ---
+
+        register(&slot);
         slot.refresh();
         slot
     }
@@ -327,6 +432,9 @@ impl Slot {
         };
         *self.camera.borrow_mut() = camera.clone();
         self.relabel();
+        if !same_id {
+            self.load_mute();
+        }
         if same_id && same_online {
             self.refresh();
             return;
@@ -364,13 +472,17 @@ impl Slot {
     pub fn go_live(self: &Rc<Self>) {
         if self.is_history() || self.status.get() == Status::Offline {
             self.stop_stream();
-            if self.camera_id().is_some() {
-                self.start_live();
+            match self.camera() {
+                // a disabled camera has nothing live to show; stay offline
+                Some(c) if c.status != CameraStatus::Enabled => self.set_status(Status::Offline),
+                Some(_) => self.start_live(),
+                None => self.set_status(Status::Empty),
             }
         }
     }
 
     pub fn set_paused(&self, paused: bool) {
+        self.paused.set(paused);
         if let Some(s) = &*self.stream.borrow() {
             if paused {
                 s.pause();
@@ -394,18 +506,20 @@ impl Slot {
         let Some(camera_id) = self.camera_id() else {
             return;
         };
+        self.advancing.set(false);
+        self.paused.set(paused);
         let current = self.stream.borrow().as_ref().and_then(|s| s.recording());
         if let Some(rec) = current
             && rec.contains(target_secs)
         {
             if let Some(s) = &*self.stream.borrow() {
                 s.seek_ms(rec.offset_ms(target_secs));
-                s.set_speed(speed);
                 if paused {
                     s.pause();
                 }
             }
             self.position_ms.set(Some(target_secs * 1000));
+            self.last_frame_at.set(Some(std::time::Instant::now()));
             return;
         }
         let Some(client) = self.services.client() else {
@@ -436,6 +550,8 @@ impl Slot {
                     };
                     if switched {
                         slot.position_ms.set(Some(target_secs * 1000));
+                        slot.last_frame_at.set(Some(std::time::Instant::now()));
+                        slot.set_status(Status::Connecting);
                     } else {
                         slot.stop_stream();
                         slot.open_history(rec, target_secs, speed, paused);
@@ -450,19 +566,131 @@ impl Slot {
         });
     }
 
-    /// Called ~4×/s by the grid: live timecode is the local wall clock.
-    pub fn tick(&self, now: chrono::DateTime<chrono::Local>) {
+    /// Called ~4×/s by the grid: live timecode is the local wall clock;
+    /// history shows the stream position in the timecode and the badge,
+    /// and runs the end-of-file watchdog.
+    pub fn tick(self: &Rc<Self>, now: chrono::DateTime<chrono::Local>) {
         match self.status.get() {
-            Status::Live | Status::Connecting => {
+            Status::Live => {
                 self.timecode.set_text(&format_timecode(&now.naive_local()));
             }
-            Status::History => {
+            Status::Connecting if !self.is_history() => {
+                self.timecode.set_text(&format_timecode(&now.naive_local()));
+            }
+            Status::History | Status::Connecting => {
                 if let Some(ms) = self.position_ms.get() {
-                    self.timecode.set_text(&format_timecode_ms(ms));
+                    let text = format_timecode_ms(ms);
+                    self.timecode.set_text(&text);
+                    if self.status.get() == Status::History {
+                        self.status_label.set_text(&format!("HISTORY {text}"));
+                    }
                 }
+                self.check_end_of_file();
             }
             _ => {}
         }
+    }
+
+    /// History: at the end of the file with no frames for a while → next.
+    fn check_end_of_file(self: &Rc<Self>) {
+        if self.paused.get() || self.advancing.get() {
+            return;
+        }
+        let rec = self.stream.borrow().as_ref().and_then(|s| s.recording());
+        let Some(rec) = rec else { return };
+        let Some(pos) = self.position_ms.get() else {
+            return;
+        };
+        let silent = self
+            .last_frame_at
+            .get()
+            .is_some_and(|t| t.elapsed() >= END_OF_FILE_SILENCE);
+        if silent && pos >= rec.stop_time * 1000 - 1500 {
+            self.advance_after(rec);
+        }
+    }
+
+    /// The current recording ended: continue into the next one (jumping
+    /// over a gap to its start), back to live when the file is the one
+    /// still being written, otherwise hold at the end.
+    fn advance_after(self: &Rc<Self>, rec: HistoryRecording) {
+        if self.advancing.replace(true) {
+            return;
+        }
+        let Some(camera_id) = self.camera_id() else {
+            return;
+        };
+        let Some(client) = self.services.client() else {
+            return;
+        };
+        let now = chrono::Local::now().timestamp();
+        if rec.stop_time >= now - LIVE_EDGE_SLACK_SECS {
+            tracing::info!("slot {}: history caught up with live", self.index);
+            self.go_live();
+            return;
+        }
+        let generation = self.generation.get();
+        let (speed, paused) = (
+            self.stream
+                .borrow()
+                .as_ref()
+                .map(|s| s.source())
+                .and_then(|src| match src {
+                    StreamSource::History { params, .. } => Some(params.speed),
+                    _ => None,
+                })
+                .unwrap_or_default(),
+            self.paused.get(),
+        );
+        let fut = self
+            .services
+            .run(bridge::find_next_recording(client, camera_id, rec.clone()));
+        let w = Rc::downgrade(self);
+        glib::spawn_future_local(async move {
+            let next = fut.await;
+            let Some(slot) = w.upgrade() else { return };
+            if slot.generation.get() != generation || slot.camera_id() != Some(camera_id) {
+                return;
+            }
+            match next {
+                Some(next) => {
+                    let gap = next.start_time - rec.stop_time;
+                    tracing::info!(
+                        "slot {}: recording {} ended → {} (gap {gap} s)",
+                        slot.index,
+                        rec.id,
+                        next.id
+                    );
+                    let target = next.start_time;
+                    let switched = {
+                        let stream = slot.stream.borrow();
+                        match stream.as_ref() {
+                            Some(s) if s.is_history() => {
+                                s.play(next.clone(), next.play_params(target, speed, paused));
+                                true
+                            }
+                            _ => false,
+                        }
+                    };
+                    slot.position_ms.set(Some(target * 1000));
+                    slot.last_frame_at.set(Some(std::time::Instant::now()));
+                    if !switched {
+                        slot.stop_stream();
+                        slot.open_history(next, target, speed, paused);
+                    }
+                    slot.advancing.set(false);
+                }
+                None => {
+                    let name = slot.camera().map(|c| c.name).unwrap_or_default();
+                    tracing::info!("slot {}: no recording after {}", slot.index, rec.id);
+                    slot.store.toast(format!("End of recordings · {name}"));
+                    // stay (frozen) at the end; a seek or Go live moves on
+                    if let Some(s) = &*slot.stream.borrow() {
+                        s.pause();
+                    }
+                }
+            }
+        });
     }
 
     // --- streams -----------------------------------------------------------
@@ -498,6 +726,8 @@ impl Slot {
         }
         self.stream.borrow_mut().take();
         self.position_ms.set(None);
+        self.last_frame_at.set(None);
+        self.advancing.set(false);
         self.picture.set_paintable(None::<&gtk::gdk::Paintable>);
     }
 
@@ -556,6 +786,7 @@ impl Slot {
         };
         self.set_status(Status::Connecting);
         self.position_ms.set(Some(target_secs * 1000));
+        self.last_frame_at.set(Some(std::time::Instant::now()));
         let params = recording.play_params(target_secs, speed, paused);
         self.open(
             &auth,
@@ -588,19 +819,46 @@ impl Slot {
                 }
                 StreamEvent::Offline(why) => {
                     tracing::warn!("slot {}: offline: {why}", slot.index);
-                    slot.set_status(Status::Offline);
-                    slot.schedule_retry();
+                    // a history session that gave up at the end of its file
+                    // is just a recording that ran out
+                    let ended = slot.stream.borrow().as_ref().and_then(|s| s.recording());
+                    match (ended, slot.position_ms.get()) {
+                        (Some(rec), Some(pos)) if pos >= rec.stop_time * 1000 - 3000 => {
+                            slot.advance_after(rec);
+                        }
+                        _ => {
+                            slot.set_status(Status::Offline);
+                            slot.schedule_retry();
+                        }
+                    }
                 }
                 StreamEvent::Position(ms) => {
                     slot.position_ms.set(Some(ms));
+                    slot.last_frame_at.set(Some(std::time::Instant::now()));
                     if slot.status.get() == Status::Connecting {
                         slot.set_status(Status::History);
+                    }
+                }
+                StreamEvent::Ended => {
+                    // bind first: `advance_after` may replace the stream
+                    let rec = slot.stream.borrow().as_ref().and_then(|s| s.recording());
+                    if let Some(rec) = rec {
+                        tracing::info!(
+                            "slot {}: close notice for recording {}",
+                            slot.index,
+                            rec.id
+                        );
+                        slot.position_ms.set(Some(rec.stop_time * 1000));
+                        slot.advance_after(rec);
                     }
                 }
             }
         });
         match opened {
-            Ok(stream) => *self.stream.borrow_mut() = Some(stream),
+            Ok(stream) => {
+                stream.set_mute(self.muted.get());
+                *self.stream.borrow_mut() = Some(stream);
+            }
             Err(e) => {
                 tracing::warn!("stream URL: {e}");
                 self.set_status(Status::Offline);
@@ -633,22 +891,64 @@ impl Slot {
 
     // --- actions -------------------------------------------------------------
 
-    fn toggle_mute(&self) {
+    fn toggle_mute(self: &Rc<Self>) {
         let muted = !self.muted.get();
+        self.set_muted(muted, true);
+        if !muted && let Some(c) = self.camera() {
+            self.store.toast(format!("Audio · {}", c.name));
+        }
+    }
+
+    /// Apply a mute state to icon, pipeline and (if `persist`) the
+    /// profile's `camera_muted` table. Unmuting mutes every other slot:
+    /// one camera plays audio at a time, as in the Synology client.
+    fn set_muted(self: &Rc<Self>, muted: bool, persist: bool) {
         self.muted.set(muted);
         self.mute_icon.set_icon_name(Some(&icons::name(if muted {
             "volume_off"
         } else {
             "volume_up"
         })));
+        if let Some(button) = self.mute_icon.parent() {
+            button.set_tooltip_text(Some(if muted { "Unmute" } else { "Mute" }));
+        }
         if let Some(s) = &*self.stream.borrow() {
             s.set_mute(muted);
         }
-        self.store.toast(if muted {
-            "Muted (audio playback not implemented)"
-        } else {
-            "Unmuted (audio playback not implemented)"
-        });
+        if persist && let Some(id) = self.camera_id() {
+            let profile = active_profile_name(&self.store);
+            let mut cfg = self.store.config();
+            if let Some(p) = cfg.profiles.get_mut(&profile) {
+                p.state.camera_muted.insert(id.max(0) as u32, muted);
+                drop(cfg);
+                self.store.save_soon();
+            }
+        }
+        if !muted {
+            for other in live_slots() {
+                if other.index != self.index && !other.muted.get() {
+                    other.set_muted(true, true);
+                }
+            }
+        }
+    }
+
+    /// Mute state for the current camera from the profile's `camera_muted`
+    /// table (absent = muted).
+    fn load_mute(self: &Rc<Self>) {
+        let muted = match self.camera_id() {
+            Some(id) => {
+                let profile = active_profile_name(&self.store);
+                self.store
+                    .config()
+                    .profiles
+                    .get(&profile)
+                    .and_then(|p| p.state.camera_muted.get(&(id.max(0) as u32)).copied())
+                    .unwrap_or(true)
+            }
+            None => true,
+        };
+        self.set_muted(muted, false);
     }
 
     fn take_snapshot(&self) {
@@ -734,11 +1034,22 @@ impl Slot {
             status,
             Status::Live | Status::History | Status::Connecting
         ));
+        let disabled = self
+            .camera
+            .borrow()
+            .as_ref()
+            .is_some_and(|c| c.status != CameraStatus::Enabled);
+        self.offline_label.set_text(if disabled {
+            "camera disabled in Surveillance Station"
+        } else {
+            "camera offline · reconnecting"
+        });
         self.offline_label.set_visible(status == Status::Offline);
         self.picture.set_visible(status != Status::Offline);
 
         let (class, text) = match status {
             Status::History => ("history", "HISTORY"),
+            Status::Offline if disabled => ("offline", "DISABLED"),
             Status::Offline => ("offline", "OFFLINE"),
             _ => ("live", "LIVE"),
         };
@@ -758,6 +1069,36 @@ impl Drop for Slot {
             id.remove();
         }
     }
+}
+
+// --- audio: one unmuted slot at a time ----------------------------------------
+
+thread_local! {
+    /// Every live `Slot` (weak), so unmuting one can mute the others. Slots
+    /// of a discarded layout drop out as their `Rc`s die.
+    static SLOTS: RefCell<Vec<std::rc::Weak<Slot>>> = const { RefCell::new(Vec::new()) };
+}
+
+fn register(slot: &Rc<Slot>) {
+    SLOTS.with(|s| {
+        let mut v = s.borrow_mut();
+        v.retain(|w| w.strong_count() > 0);
+        v.push(Rc::downgrade(slot));
+    });
+}
+
+fn live_slots() -> Vec<Rc<Slot>> {
+    SLOTS.with(|s| s.borrow().iter().filter_map(|w| w.upgrade()).collect())
+}
+
+/// The profile whose camera tables apply: the connected one, else the default.
+fn active_profile_name(store: &Store) -> String {
+    store
+        .get()
+        .connection
+        .as_ref()
+        .map(|c| c.profile.clone())
+        .unwrap_or_else(|| store.config().general.default_profile.clone())
 }
 
 // --- pure helpers ---------------------------------------------------------------

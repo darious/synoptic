@@ -251,30 +251,19 @@ pub fn apply_connected(store: &Rc<Store>, p: &ConnectParams, c: Connected) {
             .unwrap_or_default(),
         ds_model: c.info.ds_model_name.clone(),
     };
-    // layouts belong to the profile we just logged in to
-    let layouts: Vec<(crate::state::Layout, Vec<i64>)> = store
-        .config()
-        .profiles
-        .get(&p.profile)
-        .map(|prof| {
-            prof.state
-                .layout_cameras
-                .iter()
-                .filter_map(|(k, v)| {
-                    crate::state::Layout::from_key(k)
-                        .map(|l| (l, v.iter().map(|&c| c as i64).collect()))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    // layouts and camera order belong to the profile we just logged in to
+    let (layouts, active_layout, camera_order) =
+        crate::state::profile_layouts(&mut store.config(), &p.profile, &c.cameras);
     store.update(Change::Connection, |s| {
         s.connection = Some(conn);
         s.cameras = c.cameras;
         s.home_mode = c.home_mode;
-        if !layouts.is_empty() {
-            s.slots_by_layout = layouts.into_iter().collect();
-        }
+        s.layouts = layouts;
+        s.active_layout = active_layout;
+        s.camera_order = camera_order;
+        s.selected_slot = None;
     });
+    store.emit(&Change::CameraOrder);
     store.emit(&Change::Layout);
     store.emit(&Change::Slots);
     store.emit(&Change::HomeMode);

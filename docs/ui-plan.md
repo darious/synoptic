@@ -8,9 +8,12 @@ Icons: Material Symbols Rounded SVGs in `crates/synoptic/data/icons/` as
 ## Stack
 
 - gtk4-rs 0.10 (GTK 4.18), plain GTK widgets + our CSS, no libadwaita.
-- Video: GStreamer `appsrc ! h26xparse ! decodebin3 ! gtk4paintablesink`,
+- Video: GStreamer `appsrc ! h26xparse ! decodebin3 ! queue ! [vapostproc] ! videoconvert ! gtk4paintablesink`,
   one pipeline per slot; `gtk::Picture` shows the sink's `Paintable`.
-  VAAPI through `decodebin3` auto-plugging (`vah264dec`/`vah265dec`).
+  VAAPI through `decodebin3` auto-plugging (`vah264dec`/`vah265dec`); if a
+  pipeline errors before its first frame it is rebuilt with `avdec_*` and
+  software decoding is used for the rest of the session. Optional AAC/PCMU
+  audio branch through `volume ! autoaudiosink` (one unmuted slot at a time).
 - Async: one tokio runtime on a background thread (`services.rs`) owning
   `ss_api::Client`, `ss_stream::MixStreamClient`s and polling loops. UI ↔
   tokio via `async_channel` (glib main context side uses `glib::spawn_future_local`).

@@ -12,7 +12,7 @@
 //! | `[general]` ([`General`]) | default profile, theme, panel visibility, poll intervals, snapshot folder |
 //! | `[session]` ([`Session`]) | grid layout, last page, search times and presets, event-type filter |
 //! | `[setting_overrides]`, `[setting_overrides_bool]`, `[setting_overrides_choice]` | Settings-page overrides, see [`registry`] |
-//! | `[profiles.<name>]` ([`Profile`]) | host, port, https, verify_ssl, device_id, and that NAS's camera-keyed tables ([`ProfileState`]): layouts, per-camera protocol, RTSP override, stream profile, volume, mute, fisheye dewarp/lens/mount, legacy event-type cache, search camera lists |
+//! | `[profiles.<name>]` ([`Profile`]) | host, port, https, verify_ssl, device_id, and that NAS's camera-keyed tables ([`ProfileState`]): named layouts (`[[layouts]]`), camera panel order, per-camera protocol, RTSP override, stream profile, volume, mute, fisheye dewarp/lens/mount, legacy event-type cache, search camera lists |
 //!
 //! Any key this crate does not know is kept in the `extra` table of the
 //! section it was found in and written back unchanged, so a newer
@@ -50,8 +50,9 @@ pub mod secrets;
 pub use io::{ConfigError, Loaded, load_from, load_or_salvage, save_to};
 pub use model::{
     AppConfig, DEFAULT_PORT, DEWARP_MODES, EventTypeHistory, FISHEYE_MOUNT_WALL, GRID_LAYOUTS,
-    General, MIN_POLL_INTERVAL, Profile, ProfileState, STREAM_PROTOCOLS, SearchFilters, SearchPage,
-    Session, StreamProfile, Theme, TimePreset, default_snapshot_dir,
+    General, LAYOUT_SHAPES, LayoutDef, MIN_POLL_INTERVAL, Profile, ProfileState, STREAM_PROTOCOLS,
+    SearchFilters, SearchPage, Session, StreamProfile, TIMELINE_EVENT_KINDS, Theme, TimePreset,
+    default_snapshot_dir, shape_slots,
 };
 pub use paths::{APP_DIR_NAME, CONFIG_FILE_NAME, Paths};
 pub use registry::{SETTINGS, SettingDef, SettingError, SettingKind, SettingValue};

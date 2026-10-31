@@ -312,10 +312,18 @@ pub struct Session {
     pub snapshots_search_from_time: String,
     pub snapshots_search_to_time: String,
     pub snapshots_search_time_preset: String,
+    /// Live View timeline: event kinds drawn as markers, any of
+    /// `"motion"`, `"alarm"`, `"manual"`, `"other"` (default: all four).
+    pub timeline_event_types: Vec<String>,
+    /// Live View timeline: draw recording presence bars.
+    pub timeline_show_recordings: bool,
     /// Keys this crate does not know, written back unchanged.
     #[serde(flatten)]
     pub extra: Table,
 }
+
+/// Every timeline event kind, the default of [`Session::timeline_event_types`].
+pub const TIMELINE_EVENT_KINDS: [&str; 4] = ["motion", "alarm", "manual", "other"];
 
 impl Default for Session {
     fn default() -> Self {
@@ -333,6 +341,8 @@ impl Default for Session {
             snapshots_search_from_time: String::new(),
             snapshots_search_to_time: String::new(),
             snapshots_search_time_preset: String::new(),
+            timeline_event_types: TIMELINE_EVENT_KINDS.iter().map(|s| s.to_string()).collect(),
+            timeline_show_recordings: true,
             extra: Table::new(),
         }
     }
@@ -354,6 +364,17 @@ impl Session {
                 .collect(),
             _ => Vec::new(),
         };
+        let timeline_event_types = match t.remove("timeline_event_types") {
+            Some(Value::Array(items)) => items
+                .into_iter()
+                .filter_map(|v| match v {
+                    Value::String(s) if TIMELINE_EVENT_KINDS.contains(&s.as_str()) => Some(s),
+                    _ => None,
+                })
+                .collect(),
+            Some(_) => Vec::new(),
+            None => Session::default().timeline_event_types,
+        };
         Self {
             grid_layout,
             last_page: str_or(t.remove("last_page"), "live"),
@@ -371,6 +392,8 @@ impl Session {
             snapshots_search_from_time: time_text(t.remove("snapshots_search_from_time")),
             snapshots_search_to_time: time_text(t.remove("snapshots_search_to_time")),
             snapshots_search_time_preset: str_or(t.remove("snapshots_search_time_preset"), ""),
+            timeline_event_types,
+            timeline_show_recordings: bool_or(t.remove("timeline_show_recordings"), true),
             extra: t,
         }
     }
@@ -448,6 +471,67 @@ impl EventTypeHistory {
     }
 }
 
+/// Grid shapes a saved layout may use: `rows x cols` presets and the two
+/// "one big + small" shapes (`1+5`: a 2×2 cell in a 3×3 grid, `1+7`: a 3×3
+/// cell in a 4×4 grid). Slot counts in the same order.
+pub const LAYOUT_SHAPES: &[(&str, usize)] = &[
+    ("1x1", 1),
+    ("1x2", 2),
+    ("2x1", 2),
+    ("2x2", 4),
+    ("2x3", 6),
+    ("3x2", 6),
+    ("3x3", 9),
+    ("3x4", 12),
+    ("4x3", 12),
+    ("4x4", 16),
+    ("1+5", 6),
+    ("1+7", 8),
+];
+
+/// Number of slots of a shape key, if it is one of [`LAYOUT_SHAPES`].
+pub fn shape_slots(shape: &str) -> Option<usize> {
+    LAYOUT_SHAPES
+        .iter()
+        .find(|(k, _)| *k == shape)
+        .map(|(_, n)| *n)
+}
+
+/// One saved Live View layout: `[[profiles.<name>.layouts]]`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LayoutDef {
+    /// Display name, unique within the profile.
+    pub name: String,
+    /// One of [`LAYOUT_SHAPES`] keys, e.g. `"2x3"`.
+    pub shape: String,
+    /// Camera IDs per slot in shape order; `0` = empty slot.
+    pub cameras: Vec<u32>,
+}
+
+impl LayoutDef {
+    pub fn new(name: impl Into<String>, shape: impl Into<String>, cameras: Vec<u32>) -> Self {
+        Self {
+            name: name.into(),
+            shape: shape.into(),
+            cameras,
+        }
+    }
+
+    /// A `[[layouts]]` entry; `None` unless it is a table with a known
+    /// shape. A missing name defaults to the shape key.
+    fn from_value(v: Value) -> Option<Self> {
+        let Value::Table(mut t) = v else { return None };
+        let shape = t.remove("shape").and_then(text_of)?;
+        shape_slots(&shape)?;
+        let name = match t.remove("name").and_then(text_of) {
+            Some(n) if !n.trim().is_empty() => n,
+            _ => shape.clone(),
+        };
+        let cameras = id_list(t.remove("cameras")).unwrap_or_default();
+        Some(Self::new(name, shape, cameras))
+    }
+}
+
 /// Everything keyed by camera ID, kept per profile because every NAS
 /// numbers its cameras from 1. Written inside `[profiles.<name>]`; a
 /// table that is empty is not written at all.
@@ -456,6 +540,16 @@ pub struct ProfileState {
     /// Camera IDs per grid layout (`"2x2"` → 4 entries); `0` = empty slot.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub layout_cameras: BTreeMap<String, Vec<u32>>,
+    /// Named Live View layouts, in menu order (supersedes `layout_cameras`,
+    /// which is still read for migration and mirrored for square shapes).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub layouts: Vec<LayoutDef>,
+    /// Name of the layout shown on login; empty = the first one.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub active_layout: String,
+    /// Camera panel order by camera ID; cameras absent here follow in NAS order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub camera_order: Vec<u32>,
     /// Direct RTSP URL per camera ID, played by protocol `"direct"`.
     #[serde(
         skip_serializing_if = "BTreeMap::is_empty",
@@ -527,6 +621,9 @@ pub struct ProfileState {
 /// copy is migrated from.
 const PROFILE_STATE_KEYS: &[&str] = &[
     "layout_cameras",
+    "layouts",
+    "active_layout",
+    "camera_order",
     "camera_overrides",
     "camera_protocols",
     "camera_live_view_stream_profiles",
@@ -548,6 +645,35 @@ impl ProfileState {
         *self == Self::default()
     }
 
+    /// One-time migration: when no `layouts` are saved yet, build one per
+    /// non-empty `layout_cameras` entry with a known shape (named by its
+    /// key) and make `active_shape` (the old `session.grid_layout`) the
+    /// active one. Returns true when something was migrated.
+    pub fn migrate_layouts(&mut self, active_shape: &str) -> bool {
+        if !self.layouts.is_empty() {
+            return false;
+        }
+        for (shape, cameras) in &self.layout_cameras {
+            let Some(n) = shape_slots(shape) else {
+                continue;
+            };
+            if cameras.iter().all(|&c| c == 0) {
+                continue;
+            }
+            let mut cameras = cameras.clone();
+            cameras.resize(n, 0);
+            self.layouts
+                .push(LayoutDef::new(shape.clone(), shape.clone(), cameras));
+        }
+        if self.layouts.is_empty() {
+            return false;
+        }
+        if self.layouts.iter().any(|l| l.shape == active_shape) {
+            self.active_layout = active_shape.to_string();
+        }
+        true
+    }
+
     /// Take the camera-keyed keys out of `t`, leaving the rest.
     fn from_table(t: &mut Table) -> Self {
         let layout_cameras = match t.remove("layout_cameras") {
@@ -563,8 +689,21 @@ impl ProfileState {
             t.remove("legacy_event_type_history"),
             EventTypeHistory::from_value,
         ));
+        let layouts = match t.remove("layouts") {
+            Some(Value::Array(items)) => items
+                .into_iter()
+                .filter_map(LayoutDef::from_value)
+                .collect(),
+            _ => Vec::new(),
+        };
         Self {
             layout_cameras,
+            layouts,
+            active_layout: t
+                .remove("active_layout")
+                .and_then(text_of)
+                .unwrap_or_default(),
+            camera_order: id_list(t.remove("camera_order")).unwrap_or_default(),
             camera_overrides: camera_map(t.remove("camera_overrides"), text_of),
             camera_protocols: camera_map(t.remove("camera_protocols"), text_of),
             camera_live_view_stream_profiles: camera_map(

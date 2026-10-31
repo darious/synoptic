@@ -3,6 +3,7 @@
 //! streams; the timeline drives the grid's playback controller.
 
 pub mod grid;
+pub mod ptz;
 pub mod slot;
 pub mod timeline;
 

@@ -18,6 +18,7 @@ pub fn build(store: &Rc<Store>) -> gtk::Box {
     for page in Page::ALL {
         let button = gtk::Button::new();
         button.set_tooltip_text(Some(page.title()));
+        button.set_widget_name(&format!("rail-{}", page.key()));
         let content = gtk::Box::new(gtk::Orientation::Vertical, 2);
         content.set_valign(gtk::Align::Center);
         content.set_halign(gtk::Align::Center);

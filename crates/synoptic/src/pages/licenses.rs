@@ -1,4 +1,4 @@
-//! Licenses page: KPI cards, Offline activation / Add license, license table.
+//! Licenses page: KPI cards, Add license, license table.
 
 use std::rc::Rc;
 
@@ -100,14 +100,9 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Widget {
     top.append(&used_card);
     top.append(&avail_card);
     top.append(&spacer());
-    let offline = icon_label_button("cloud_off", 16, "Offline activation");
-    {
-        let store = store.clone();
-        offline.connect_clicked(move |_| store.toast("Offline activation is not implemented yet"));
-    }
-    top.append(&offline);
     let add = icon_label_button("add", 16, "Add license");
     add.add_css_class("primary");
+    add.set_widget_name("licenses-add");
     top.append(&add);
     page.append(&top);
 

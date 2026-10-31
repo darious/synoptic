@@ -2,5 +2,6 @@
 //! gtk4paintablesink`) and the ss-stream → appsrc bridge. Owned by the
 //! Live View work; see docs/ui-plan.md.
 
+pub mod audio;
 pub mod bridge;
 pub mod pipeline;

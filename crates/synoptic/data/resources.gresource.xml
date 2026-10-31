@@ -6,15 +6,21 @@
     <file>style-browse.css</file>
     <file>style-admin.css</file>
     <file alias="icons/scalable/actions/ms-account_circle-symbolic.svg" preprocess="xml-stripblanks">icons/ms-account_circle-symbolic.svg</file>
-    <file alias="icons/scalable/actions/ms-add_a_photo-symbolic.svg" preprocess="xml-stripblanks">icons/ms-add_a_photo-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-add-symbolic.svg" preprocess="xml-stripblanks">icons/ms-add-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-add_a_photo-symbolic.svg" preprocess="xml-stripblanks">icons/ms-add_a_photo-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-apps-symbolic.svg" preprocess="xml-stripblanks">icons/ms-apps-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-arrow_back-symbolic.svg" preprocess="xml-stripblanks">icons/ms-arrow_back-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-arrow_downward-symbolic.svg" preprocess="xml-stripblanks">icons/ms-arrow_downward-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-arrow_forward-symbolic.svg" preprocess="xml-stripblanks">icons/ms-arrow_forward-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-arrow_upward-symbolic.svg" preprocess="xml-stripblanks">icons/ms-arrow_upward-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-backspace-symbolic.svg" preprocess="xml-stripblanks">icons/ms-backspace-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-calendar_month-symbolic.svg" preprocess="xml-stripblanks">icons/ms-calendar_month-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-cancel-symbolic.svg" preprocess="xml-stripblanks">icons/ms-cancel-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-center_focus_strong-symbolic.svg" preprocess="xml-stripblanks">icons/ms-center_focus_strong-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-center_focus_weak-symbolic.svg" preprocess="xml-stripblanks">icons/ms-center_focus_weak-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-check-symbolic.svg" preprocess="xml-stripblanks">icons/ms-check-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-check_circle-fill-symbolic.svg" preprocess="xml-stripblanks">icons/ms-check_circle-fill-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-check_circle-symbolic.svg" preprocess="xml-stripblanks">icons/ms-check_circle-symbolic.svg</file>
-    <file alias="icons/scalable/actions/ms-check-symbolic.svg" preprocess="xml-stripblanks">icons/ms-check-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-chevron_left-symbolic.svg" preprocess="xml-stripblanks">icons/ms-chevron_left-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-chevron_right-symbolic.svg" preprocess="xml-stripblanks">icons/ms-chevron_right-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-circle-fill-symbolic.svg" preprocess="xml-stripblanks">icons/ms-circle-fill-symbolic.svg</file>
@@ -23,8 +29,8 @@
     <file alias="icons/scalable/actions/ms-control_camera-symbolic.svg" preprocess="xml-stripblanks">icons/ms-control_camera-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-crop_square-symbolic.svg" preprocess="xml-stripblanks">icons/ms-crop_square-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-dark_mode-symbolic.svg" preprocess="xml-stripblanks">icons/ms-dark_mode-symbolic.svg</file>
-    <file alias="icons/scalable/actions/ms-delete_sweep-symbolic.svg" preprocess="xml-stripblanks">icons/ms-delete_sweep-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-delete-symbolic.svg" preprocess="xml-stripblanks">icons/ms-delete-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-delete_sweep-symbolic.svg" preprocess="xml-stripblanks">icons/ms-delete_sweep-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-description-symbolic.svg" preprocess="xml-stripblanks">icons/ms-description-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-directions_car-symbolic.svg" preprocess="xml-stripblanks">icons/ms-directions_car-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-directions_run-symbolic.svg" preprocess="xml-stripblanks">icons/ms-directions_run-symbolic.svg</file>
@@ -48,18 +54,19 @@
     <file alias="icons/scalable/actions/ms-left_panel_open-symbolic.svg" preprocess="xml-stripblanks">icons/ms-left_panel_open-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-light_mode-symbolic.svg" preprocess="xml-stripblanks">icons/ms-light_mode-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-link-symbolic.svg" preprocess="xml-stripblanks">icons/ms-link-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-location_on-symbolic.svg" preprocess="xml-stripblanks">icons/ms-location_on-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-lock-fill-symbolic.svg" preprocess="xml-stripblanks">icons/ms-lock-fill-symbolic.svg</file>
-    <file alias="icons/scalable/actions/ms-lock_open-symbolic.svg" preprocess="xml-stripblanks">icons/ms-lock_open-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-lock-symbolic.svg" preprocess="xml-stripblanks">icons/ms-lock-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-lock_open-symbolic.svg" preprocess="xml-stripblanks">icons/ms-lock_open-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-logout-symbolic.svg" preprocess="xml-stripblanks">icons/ms-logout-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-manage_search-symbolic.svg" preprocess="xml-stripblanks">icons/ms-manage_search-symbolic.svg</file>
-    <file alias="icons/scalable/actions/ms-mic-symbolic.svg" preprocess="xml-stripblanks">icons/ms-mic-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-more_vert-symbolic.svg" preprocess="xml-stripblanks">icons/ms-more_vert-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-new_releases-symbolic.svg" preprocess="xml-stripblanks">icons/ms-new_releases-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-north_east-symbolic.svg" preprocess="xml-stripblanks">icons/ms-north_east-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-north_west-symbolic.svg" preprocess="xml-stripblanks">icons/ms-north_west-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-notifications-symbolic.svg" preprocess="xml-stripblanks">icons/ms-notifications-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-open_in_full-symbolic.svg" preprocess="xml-stripblanks">icons/ms-open_in_full-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-open_with-symbolic.svg" preprocess="xml-stripblanks">icons/ms-open_with-symbolic.svg</file>
-    <file alias="icons/scalable/actions/ms-panorama_horizontal-symbolic.svg" preprocess="xml-stripblanks">icons/ms-panorama_horizontal-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-pause-fill-symbolic.svg" preprocess="xml-stripblanks">icons/ms-pause-fill-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-pause-symbolic.svg" preprocess="xml-stripblanks">icons/ms-pause-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-person-symbolic.svg" preprocess="xml-stripblanks">icons/ms-person-symbolic.svg</file>
@@ -75,17 +82,21 @@
     <file alias="icons/scalable/actions/ms-replay_10-symbolic.svg" preprocess="xml-stripblanks">icons/ms-replay_10-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-report-symbolic.svg" preprocess="xml-stripblanks">icons/ms-report-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-restart_alt-symbolic.svg" preprocess="xml-stripblanks">icons/ms-restart_alt-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-route-symbolic.svg" preprocess="xml-stripblanks">icons/ms-route-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-schedule-symbolic.svg" preprocess="xml-stripblanks">icons/ms-schedule-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-search-symbolic.svg" preprocess="xml-stripblanks">icons/ms-search-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-select_all-symbolic.svg" preprocess="xml-stripblanks">icons/ms-select_all-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-settings-symbolic.svg" preprocess="xml-stripblanks">icons/ms-settings-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-skip_next-symbolic.svg" preprocess="xml-stripblanks">icons/ms-skip_next-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-skip_previous-symbolic.svg" preprocess="xml-stripblanks">icons/ms-skip_previous-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-south_east-symbolic.svg" preprocess="xml-stripblanks">icons/ms-south_east-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-south_west-symbolic.svg" preprocess="xml-stripblanks">icons/ms-south_west-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-stop_circle-symbolic.svg" preprocess="xml-stripblanks">icons/ms-stop_circle-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-timelapse-symbolic.svg" preprocess="xml-stripblanks">icons/ms-timelapse-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-tune-symbolic.svg" preprocess="xml-stripblanks">icons/ms-tune-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-undo-symbolic.svg" preprocess="xml-stripblanks">icons/ms-undo-symbolic.svg</file>
-    <file alias="icons/scalable/actions/ms-videocam_off-symbolic.svg" preprocess="xml-stripblanks">icons/ms-videocam_off-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-videocam-symbolic.svg" preprocess="xml-stripblanks">icons/ms-videocam-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-videocam_off-symbolic.svg" preprocess="xml-stripblanks">icons/ms-videocam_off-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-view_comfy-symbolic.svg" preprocess="xml-stripblanks">icons/ms-view_comfy-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-view_timeline-symbolic.svg" preprocess="xml-stripblanks">icons/ms-view_timeline-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-visibility-symbolic.svg" preprocess="xml-stripblanks">icons/ms-visibility-symbolic.svg</file>

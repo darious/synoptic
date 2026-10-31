@@ -6,10 +6,12 @@
 //! Module map and the parallel-work split: `docs/ui-plan.md`.
 
 mod dialogs;
+mod driver;
 mod icons;
 mod pages;
 mod services;
 mod state;
+mod update_check;
 mod video;
 mod widgets;
 
@@ -95,6 +97,8 @@ fn build_ui(app: &gtk::Application) {
 
     dialogs::install(&window, &store, &services);
     services::install(&store, &services);
+    update_check::install(&store, &services);
+    driver::install(app, &store, &services);
 
     {
         let window = window.clone();
