@@ -7,5 +7,17 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+serde = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+directories = { workspace = true }
+tracing = { workspace = true }
+# The reference keeps credentials in the freedesktop Secret Service
+# (python-keyring's default on Linux); the secret-service backend is what
+# shares them. Pure Rust (zbus + RustCrypto), no libdbus or OpenSSL needed.
+# async-io rather than tokio: keyring blocks on its own executor, and doing
+# that inside a tokio worker deadlocks (keyring-rs issue 132).
+keyring.workspace = true
 
 [dev-dependencies]
+tempfile = { workspace = true }
