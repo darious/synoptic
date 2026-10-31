@@ -92,7 +92,7 @@ pub fn build(store: &Rc<Store>) -> gtk::Box {
     store.subscribe(move |change| {
         if matches!(
             change,
-            Change::Page | Change::Connection | Change::UpdateNotice | Change::Density
+            Change::Page | Change::Connection | Change::UpdateNotice
         ) {
             refresh();
         }

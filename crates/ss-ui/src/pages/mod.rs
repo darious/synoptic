@@ -65,14 +65,3 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Stack {
     });
     stack
 }
-
-/// Placeholder used by pages that are not implemented yet.
-pub fn placeholder(text: &str) -> gtk::Widget {
-    let b = gtk::Box::new(gtk::Orientation::Vertical, 8);
-    b.set_valign(gtk::Align::Center);
-    b.set_halign(gtk::Align::Center);
-    let l = gtk::Label::new(Some(text));
-    l.add_css_class("muted");
-    b.append(&l);
-    b.upcast()
-}

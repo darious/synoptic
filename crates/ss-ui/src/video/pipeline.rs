@@ -207,6 +207,7 @@ impl Pipeline {
 
     /// Drop everything queued (used when a stream reconnects so the decoder
     /// restarts cleanly on the next keyframe).
+    #[allow(dead_code)] // kept for reconnect handling; needs a display to validate
     pub fn flush(&self) {
         let _ = self.pipeline.send_event(gst::event::FlushStart::new());
         let _ = self.pipeline.send_event(gst::event::FlushStop::new(true));

@@ -1,1 +1,69 @@
-/* style-browse.css: classes owned by the browse work; tokens come from style.css */
+/* style-browse.css: classes owned by the browse work; tokens come from style.css.
+ * The shared .filter-bar/.chip/.list-row/.thumb/.event-row/.card/.pagination/
+ * .transport classes live in style.css; this file only adds what the browse
+ * pages, the Player and the Snapshot viewer need on top. */
+
+/* ---------- page frame ---------- */
+.browse { background-color: var(--bg); }
+.browse-hint { font-size: 12px; color: var(--muted); padding: 24px; }
+
+/* ---------- filter bar additions ---------- */
+.cam-filter label { color: var(--text); }
+.cam-filter image.muted { color: var(--muted); }
+.cam-filter button.cam-clear { min-width: 22px; min-height: 22px; -gtk-icon-size: 14px; }
+button.cam-chip {
+  min-height: 30px; padding: 0 10px; border-radius: 4px;
+  border: 1px solid var(--border); font-size: 12px; font-weight: 600;
+}
+button.cam-chip.selected { border-color: var(--blue); background-color: var(--blue-tint); color: var(--blue); }
+.advanced-row entry.mono { font-size: 12px; }
+.summary-row image { color: var(--muted); }
+
+/* ---------- recordings / time lapse rows ---------- */
+.list-row.clickable:hover { background-color: var(--panel); }
+.thumb-wrap { border-radius: 3px; }
+.thumb-wrap picture { border-radius: 3px; }
+.thumb-wrap .duration-badge { margin: 0 6px 6px 0; }
+.thumb-placeholder image { color: var(--muted); opacity: 0.5; -gtk-icon-size: 24px; }
+.detect-chip label { font-size: 10px; font-weight: 600; }
+.detect-chip image { -gtk-icon-size: 12px; }
+.locked-chip image { color: var(--event-orange); }
+.locked-chip label { color: var(--event-orange); }
+.row-actions button { min-width: 34px; min-height: 34px; }
+.row-actions button.locked image { color: var(--event-orange); }
+.row-actions button:disabled { opacity: 0.35; }
+
+/* ---------- events rows ---------- */
+.event-row { padding: 0 16px 0 0; }
+.event-row .event-type { min-width: 110px; }
+.event-row .event-cam { min-width: 150px; font-weight: 600; }
+.event-row .event-bar { min-width: 4px; }
+.type-other { color: var(--muted); }
+.bg-other { background-color: var(--muted); }
+
+/* ---------- snapshot cards ---------- */
+.snap-grid flowboxchild { padding: 0; }
+.snap-grid flowboxchild:selected { background: transparent; }
+.card .thumb16 { background-color: var(--slot-bg); border-radius: 4px 4px 0 0; }
+.card .thumb16 picture { border-radius: 4px 4px 0 0; }
+.card .footer button { min-width: 28px; min-height: 28px; padding: 0; border: none; -gtk-icon-size: 16px; }
+
+/* ---------- player dialog ---------- */
+.dialog .player-body { padding: 0; }
+.player-video { background-color: var(--player-bg); }
+.player-video picture { background-color: var(--player-bg); }
+.player-video .timecode { margin: 0 10px 10px 0; }
+.player-error { color: #fff; font-size: 12px; background-color: var(--overlay); padding: 6px 10px; border-radius: 3px; }
+.transport .position, .transport .duration { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 500; }
+.transport .duration { color: var(--muted); }
+.transport scale.seek { min-width: 120px; }
+.volume-pop scale { min-width: 120px; }
+.volume-pop scale trough { min-height: 4px; background-color: var(--surface); border: none; border-radius: 2px; }
+.volume-pop scale highlight { background-color: var(--blue); border-radius: 2px; }
+.volume-pop scale slider { min-width: 12px; min-height: 12px; border-radius: 50%; background-color: var(--blue); border: none; box-shadow: none; margin: -4px; }
+.dialog .dialog-header button.on image { color: #fff; }
+
+/* ---------- snapshot viewer ---------- */
+.viewer-area { background-color: var(--player-bg); }
+.viewer-area picture { background-color: var(--player-bg); }
+.viewer-zoom { margin: 0 0 10px 10px; }

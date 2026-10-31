@@ -5,10 +5,6 @@
 //! compiled into the binary as a GResource (`ms-<name>-symbolic`).
 //! Module map and the parallel-work split: `docs/ui-plan.md`.
 
-// Shell contracts (services, dialog shell, state variants) are consumed by
-// pages that are still being written. Remove once every page is wired.
-#![allow(dead_code)]
-
 mod dialogs;
 mod icons;
 mod pages;

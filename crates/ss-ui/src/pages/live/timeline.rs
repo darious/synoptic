@@ -21,6 +21,7 @@ use crate::widgets::controls::{divider_v, label, set_class, spacer};
 // --- constants (design/handoff/README.md §1 "Timeline strip") ------------------
 
 /// Default window: 2 h.
+#[cfg(test)]
 pub const DEFAULT_WINDOW_SECS: i64 = 2 * 3600;
 /// The live edge sits at 97 % of the ruler width.
 pub const LIVE_EDGE_FRAC: f64 = 0.97;

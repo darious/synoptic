@@ -201,8 +201,7 @@ pub fn build(store: &Rc<Store>) -> gtk::Revealer {
             | Change::Layout
             | Change::Slots
             | Change::SelectedSlot
-            | Change::FilterCamera
-            | Change::Density => rebuild(),
+            | Change::FilterCamera => rebuild(),
             _ => {}
         });
     }

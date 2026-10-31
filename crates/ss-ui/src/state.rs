@@ -235,7 +235,6 @@ pub enum Change {
     Notifications,
     UpdateNotice,
     FilterCamera,
-    Density,
     /// Show a toast (bottom centre, 2.2 s).
     Toast(String),
     /// Open the login dialog.

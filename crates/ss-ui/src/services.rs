@@ -214,6 +214,10 @@ pub fn install(store: &Rc<Store>, services: &Rc<Services>) {
             Change::Connection if store.get().logged_in() => {
                 start_camera_polling(&store, &services);
             }
+            Change::CameraSettings(id) => {
+                tracing::info!(camera = id, "camera settings changed; reloading streams");
+                store.emit(&Change::RequestReload);
+            }
             Change::HomeMode => {
                 let on = store.get().home_mode;
                 let fut = services.set_home_mode(on);

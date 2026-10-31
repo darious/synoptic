@@ -14,13 +14,14 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 | `crates/ss-play` | `FrameSink` trait + subprocess sinks (mpv via pipe, ffmpeg remux to file). No GStreamer/libmpv dev libs on this machine yet. | – |
 | `crates/ss-config` | profiles + settings TOML (same keys as the reference's `config.toml`), secrets via `keyring` | – |
 | `crates/ss-cli` | `ss` binary wiring the above for manual testing against a real NAS | all |
-| `crates/ss-ui` | GTK4 UI implementing `design/handoff/README.md` (tokens already in `crates/ss-ui/data/style.css`); video via GStreamer `gtk4paintablesink`. Not in `default-members`: needs `sudo apt install libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-gtk4 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-vaapi gstreamer1.0-libav gstreamer1.0-tools fonts-ibm-plex` | api, stream, config |
+| `crates/ss-ui` | GTK4 app `surveillance` implementing `design/handoff/README.md`. Module map in `docs/ui-plan.md`: `state.rs` (Store/Change bus, config persistence), `services.rs` (tokio + ss-api), `widgets/` shell, `pages/live` (grid, slots, Cairo timeline), `video/` (GStreamer `appsrc → parse → decodebin3 → gtk4paintablesink`, MixStream bridge), `pages/browse`, `pages/{licenses,settings,about}`, `dialogs/`. CSS: `data/style.css` tokens + `style-{live,browse,admin}.css`; icons `data/icons/ms-*-symbolic.svg` (Material Symbols, GResource). Needs `sudo apt install libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-gtk4 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-vaapi gstreamer1.0-libav gstreamer1.0-tools fonts-ibm-plex` | api, stream, config |
 
 ## Commands
 
-- Build: `cargo build` (add `--workspace` once the GTK/GStreamer packages are installed)
-- Test: `cargo test`
-- Lint: `cargo clippy --all-targets -- -D warnings`
+- Build: `cargo build --workspace`
+- Run the app: `cargo run -p ss-ui` (needs a Wayland/X11 session; `RUST_LOG=ss_ui=debug` for logs)
+- Test: `cargo test --workspace`
+- Lint: `cargo clippy --workspace --all-targets -- -D warnings`
 - Format: `cargo fmt --all` (check with `--check`)
 
 ## Conventions
@@ -38,8 +39,9 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 - `design/handoff/` is the UI spec (README + HTML prototype). The prototype is JS-rendered; the README is authoritative.
 - This box is a headless tty (no DISPLAY/Wayland, no Xvfb); the UI cannot be screenshotted here.
 
-- No GTK4/GStreamer/libmpv dev packages installed; `mpv` and `ffmpeg`
-  binaries exist. Anything needing dev libs waits for the UI decision.
+- GTK4/GStreamer dev packages are installed; libmpv is not (ss-play uses the `mpv` binary).
+- Thread-local `SERVICES` in `widgets/popovers.rs` and the raw `ApiRequest`s in
+  `pages/browse/{recordings,timelapse}.rs` (GetThumbnail, TimeLapse) are known shortcuts.
 - There is no NAS reachable from CI/agents. Integration against a NAS is
   manual via `ss-cli`.
 - Vendor installer `*.exe` and `~/.cache/rust_ss/**` stay out of git.

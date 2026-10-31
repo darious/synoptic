@@ -136,6 +136,7 @@ enum Cmd {
     Pause,
     Resume,
     Speed(Speed),
+    #[allow(dead_code)] // reverse playback is not exposed in the timeline yet
     Reverse(bool),
     Mute(bool),
     SeekMs(u64),
@@ -286,6 +287,7 @@ impl VideoStream {
         self.inner.send(Cmd::Speed(speed));
     }
 
+    #[allow(dead_code)] // reverse playback is not exposed in the timeline yet
     pub fn set_reverse(&self, reverse: bool) {
         self.inner.send(Cmd::Reverse(reverse));
     }

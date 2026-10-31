@@ -1,9 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-# ss-ui needs the GTK4/GStreamer dev packages (see AGENTS.md); keep it out of
-# the default set so `cargo test` works on a machine without them.
-default-members = ["crates/ss-api", "crates/ss-stream", "crates/ss-play", "crates/ss-config", "crates/ss-cli"]
 
 [workspace.package]
 edition = "2024"
