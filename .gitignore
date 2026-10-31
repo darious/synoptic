@@ -3,3 +3,4 @@
 extracted/
 target/
 Cargo.lock.bak
+__pycache__/
