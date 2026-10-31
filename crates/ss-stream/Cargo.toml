@@ -7,5 +7,15 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+bytes.workspace = true
+futures-util.workspace = true
+# Same rustls tokio-tungstenite uses; `ring` is the only provider in the
+# workspace lock, named explicitly for the self-signed-certificate path.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+thiserror.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

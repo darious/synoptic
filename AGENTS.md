@@ -14,13 +14,13 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 | `crates/ss-play` | `FrameSink` trait + subprocess sinks (mpv via pipe, ffmpeg remux to file). No GStreamer/libmpv dev libs on this machine yet. | – |
 | `crates/ss-config` | profiles + settings TOML (same keys as the reference's `config.toml`), secrets via `keyring` | – |
 | `crates/ss-cli` | `ss` binary wiring the above for manual testing against a real NAS | all |
-| UI crate | **not started** — toolkit still being chosen | |
+| `crates/ss-ui` | GTK4 UI implementing `design/handoff/README.md` (tokens already in `crates/ss-ui/data/style.css`); video via GStreamer `gtk4paintablesink`. Not in `default-members`: needs `sudo apt install libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-gtk4 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-vaapi gstreamer1.0-libav gstreamer1.0-tools fonts-ibm-plex` | api, stream, config |
 
 ## Commands
 
-- Build: `cargo build --workspace`
-- Test: `cargo test --workspace`
-- Lint: `cargo clippy --workspace --all-targets -- -D warnings`
+- Build: `cargo build` (add `--workspace` once the GTK/GStreamer packages are installed)
+- Test: `cargo test`
+- Lint: `cargo clippy --all-targets -- -D warnings`
 - Format: `cargo fmt --all` (check with `--check`)
 
 ## Conventions
@@ -34,6 +34,9 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
   through the workspace owner.
 
 ## Gotchas
+
+- `design/handoff/` is the UI spec (README + HTML prototype). The prototype is JS-rendered; the README is authoritative.
+- This box is a headless tty (no DISPLAY/Wayland, no Xvfb); the UI cannot be screenshotted here.
 
 - No GTK4/GStreamer/libmpv dev packages installed; `mpv` and `ffmpeg`
   binaries exist. Anything needing dev libs waits for the UI decision.
