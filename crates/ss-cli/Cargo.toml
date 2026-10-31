@@ -12,3 +12,21 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+bytes.workspace = true
+# Local-time parsing of `--at "YYYY-MM-DD HH:MM:SS"`; no default features
+# (no wasm/serde), just the clock.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap.workspace = true
+rpassword = "7"
+serde_json.workspace = true
+ss-api = { path = "../ss-api" }
+ss-config = { path = "../ss-config" }
+ss-play = { path = "../ss-play" }
+ss-stream = { path = "../ss-stream" }
+tokio = { workspace = true, features = ["signal"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+wiremock.workspace = true
