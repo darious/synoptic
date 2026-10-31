@@ -109,7 +109,8 @@ pub use models::{
     Alert, ApiInfo, Camera, CameraStatus, Event, EventCenterCapability, EventCenterEvent,
     HomeModeInfo, IntervalCamera, IntervalRecording, License, LicenseInfo, LiveProtocol,
     LiveViewPath, Page, PtzPatrol, PtzPreset, Recording, Session, Snapshot, SsInfo, SsVersion,
-    StreamProfile, TimeLapseRecording, TimeLapseTask, decode_detection_labels, merge_intervals,
+    StreamProfile, TimeLapseRecording, TimeLapseTask, VideoCodec, decode_detection_labels,
+    merge_intervals,
 };
 pub use ptz::{FocusControl, PtzDirection, ZoomControl};
 pub use recording::{RECORDING_DOWNLOAD_VERSION, RecordingFilter};

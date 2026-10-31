@@ -158,6 +158,61 @@ pub struct Camera {
     /// The camera's Live View stream profile. Only `Camera.GetInfo` with
     /// `streamInfo=true` reports it; `Camera.List` does not.
     pub def_live_profile: Option<StreamProfile>,
+    /// Video codec of the camera's recording/live stream (`videoCodec`).
+    pub video_codec: VideoCodec,
+}
+
+/// Surveillance Station's `videoCodec` numbers, named as the web UI names
+/// them. Best effort: the mapping comes from the web client's constants and
+/// is not part of the documented API.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum VideoCodec {
+    Unknown,
+    Mjpeg,
+    Mpeg4,
+    H264,
+    MxPeg,
+    H265,
+    H264Plus,
+    H265Plus,
+    Other(i64),
+}
+
+impl VideoCodec {
+    pub fn from_number(n: i64) -> Self {
+        match n {
+            0 => Self::Unknown,
+            1 => Self::Mjpeg,
+            2 => Self::Mpeg4,
+            3 => Self::H264,
+            4 => Self::MxPeg,
+            5 => Self::H265,
+            6 => Self::H264Plus,
+            7 => Self::H265Plus,
+            n => Self::Other(n),
+        }
+    }
+
+    /// `true` for H.265 and H.265+, the codecs browsers refuse to play.
+    pub fn is_hevc(self) -> bool {
+        matches!(self, Self::H265 | Self::H265Plus)
+    }
+}
+
+impl std::fmt::Display for VideoCodec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown => f.write_str("-"),
+            Self::Mjpeg => f.write_str("MJPEG"),
+            Self::Mpeg4 => f.write_str("MPEG-4"),
+            Self::H264 => f.write_str("H.264"),
+            Self::MxPeg => f.write_str("MxPEG"),
+            Self::H265 => f.write_str("H.265"),
+            Self::H264Plus => f.write_str("H.264+"),
+            Self::H265Plus => f.write_str("H.265+"),
+            Self::Other(n) => write!(f, "codec#{n}"),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -185,6 +240,8 @@ struct RawCamera {
     audio_out: bool,
     #[serde(default, deserialize_with = "de::opt_int")]
     def_live_profile: Option<i64>,
+    #[serde(default, deserialize_with = "de::int")]
+    video_codec: i64,
 }
 
 impl From<RawCamera> for Camera {
@@ -203,6 +260,7 @@ impl From<RawCamera> for Camera {
             has_audio: r.audio_codec != 0 || r.audio_type != 0,
             has_speaker: r.audio_out,
             def_live_profile: r.def_live_profile.and_then(StreamProfile::from_number),
+            video_codec: VideoCodec::from_number(r.video_codec),
         }
     }
 }
