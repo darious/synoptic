@@ -76,18 +76,19 @@ fn build_ui(app: &gtk::Application) {
         .default_height(800)
         .build();
     // The spec's 1100×600 minimum does not fit 1024×768 (VMs, small laptops):
-    // keep a softer floor and start maximised when the monitor is smaller than
-    // the default size.
+    // keep a softer floor, clamp the default size to the monitor, and start
+    // maximised there. The maximise is requested after `present()` because
+    // the Win32 backend ignores it on an unmapped window.
     window.set_size_request(900, 540);
-    if let Some(monitor) = gtk::gdk::Display::default()
+    let small_monitor = gtk::gdk::Display::default()
         .and_then(|d| d.monitors().item(0))
         .and_downcast::<gtk::gdk::Monitor>()
-    {
-        let g = monitor.geometry();
-        if g.width() < 1280 + 40 || g.height() < 800 + 80 {
-            window.maximize();
-        }
-    }
+        .map(|m| m.geometry())
+        .filter(|g| g.width() < 1280 + 40 || g.height() < 800 + 80)
+        .inspect(|g| {
+            window.set_default_size((g.width() - 40).max(900), (g.height() - 80).max(540));
+        })
+        .is_some();
     window.set_icon_name(Some(APP_ID));
     desktop::ensure();
     apply_theme(&window, store.get().theme);
@@ -126,6 +127,9 @@ fn build_ui(app: &gtk::Application) {
     }
 
     window.present();
+    if small_monitor {
+        window.maximize();
+    }
 }
 
 fn apply_theme(window: &impl IsA<gtk::Widget>, theme: Theme) {
