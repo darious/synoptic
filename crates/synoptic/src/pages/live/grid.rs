@@ -54,6 +54,8 @@ pub struct Grid {
     shape: Cell<Option<Shape>>,
     paused: Cell<bool>,
     speed_index: Cell<usize>,
+    /// Focus as last applied, to notice the return to the layout.
+    last_focus: Cell<Option<usize>>,
     listeners: RefCell<Vec<Rc<dyn Fn()>>>,
 }
 
@@ -76,6 +78,7 @@ impl Grid {
             shape: Cell::new(None),
             paused: Cell::new(false),
             speed_index: Cell::new(SPEED_NORMAL),
+            last_focus: Cell::new(None),
             listeners: RefCell::new(Vec::new()),
         });
         grid.sync();
@@ -307,6 +310,18 @@ impl Grid {
             let show = focused.is_none_or(|f| f == slot.index());
             slot.widget().set_visible(show);
             slot.set_focused(show && focused.is_some());
+            // hidden slots stop decoding; their stream stays connected
+            slot.set_suspended(!show);
+        }
+        // back to the layout in history mode: the hidden slots were frozen
+        // while the focused one played on, so line them up again
+        let returned = self.last_focus.replace(focused).is_some() && focused.is_none();
+        drop(slots);
+        if returned
+            && self.playback().mode == Mode::History
+            && let Some(ms) = self.tracked_slot().and_then(|s| s.position_ms())
+        {
+            self.seek(ms / 1000);
         }
     }
 

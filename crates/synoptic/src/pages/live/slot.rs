@@ -65,6 +65,9 @@ pub struct Slot {
     last_frame_at: Cell<Option<std::time::Instant>>,
     /// Pause state the grid asked for (history frames stop while paused).
     paused: Cell<bool>,
+    /// Hidden behind a focused slot: the stream stays connected but is
+    /// paused (live: frames dropped before the decoder) to spare the CPU.
+    suspended: Cell<bool>,
     /// A "next recording" lookup is in flight; don't start another.
     advancing: Cell<bool>,
     /// Bumped whenever the stream is (re)started so stale async results are ignored.
@@ -225,6 +228,7 @@ impl Slot {
             position_ms: Cell::new(None),
             last_frame_at: Cell::new(None),
             paused: Cell::new(false),
+            suspended: Cell::new(false),
             advancing: Cell::new(false),
             generation: Cell::new(0),
             seek_serial: Cell::new(0),
@@ -526,9 +530,25 @@ impl Slot {
     pub fn set_paused(&self, paused: bool) {
         self.paused.set(paused);
         if let Some(s) = &*self.stream.borrow() {
-            if paused {
+            if paused || self.suspended.get() {
                 s.pause();
             } else {
+                s.resume();
+            }
+        }
+    }
+
+    /// Grid → slot: hidden behind a focused slot (or visible again). The
+    /// stream is paused rather than closed so the layout comes back fast;
+    /// in history mode the grid re-seeks the slot when it reappears.
+    pub fn set_suspended(&self, suspended: bool) {
+        if self.suspended.replace(suspended) == suspended {
+            return;
+        }
+        if let Some(s) = &*self.stream.borrow() {
+            if suspended {
+                s.pause();
+            } else if !self.paused.get() {
                 s.resume();
             }
         }
@@ -884,6 +904,9 @@ impl Slot {
         match opened {
             Ok(stream) => {
                 stream.set_mute(self.muted.get());
+                if self.suspended.get() || self.paused.get() {
+                    stream.pause();
+                }
                 *self.stream.borrow_mut() = Some(stream);
             }
             Err(e) => {
