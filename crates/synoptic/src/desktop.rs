@@ -7,9 +7,8 @@
 //! nothing else in those directories is touched. `tools/install.sh` does
 //! the same for a release build.
 
-use std::path::Path;
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 use crate::APP_ID;
@@ -18,6 +17,7 @@ use crate::APP_ID;
 const ICON: &str = include_str!("../data/icons/io.github.darious.Synoptic.svg");
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const ICON_SYMBOLIC: &str = include_str!("../data/icons/io.github.darious.Synoptic-symbolic.svg");
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const DESKTOP: &str = include_str!("../data/io.github.darious.Synoptic.desktop");
 
 /// `$XDG_DATA_HOME`, else `~/.local/share`.
@@ -30,6 +30,7 @@ fn data_home() -> Option<PathBuf> {
 }
 
 /// The desktop entry with `Exec` pointing at `exe`.
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn desktop_entry(exe: &Path) -> String {
     let exe = exe.to_string_lossy();
     let quoted = if exe.contains(' ') {
@@ -116,10 +117,9 @@ pub fn ensure() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
-    use crate::APP_ID;
 
     #[test]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     fn exec_points_at_the_binary_and_keeps_the_rest() {
         let e = desktop_entry(Path::new("/opt/syn optic/synoptic"));
         assert!(e.contains("Exec=\"/opt/syn optic/synoptic\"\n"));
