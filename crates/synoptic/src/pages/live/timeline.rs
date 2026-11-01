@@ -25,6 +25,8 @@ use gtk::cairo;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
+use ss_api::Camera;
+
 use super::grid::{Grid, Mode, Playback, SPEEDS};
 use crate::icons;
 use crate::services::Services;
@@ -456,6 +458,8 @@ struct Timeline {
     zoom_label: gtk::Label,
     tracking_box: gtk::Box,
     tracking_cam: gtk::Label,
+    prev_button: gtk::Button,
+    next_button: gtk::Button,
     pause_button: gtk::Button,
     pause_icon: gtk::Image,
     speed_dropdown: gtk::DropDown,
@@ -481,6 +485,11 @@ struct Timeline {
     fetch_generation: Cell<u64>,
     /// Last position shown in History (unix ms), kept while a seek is in flight.
     last_position_ms: Cell<Option<i64>>,
+    /// The last `seek_to` target and when it was requested: the slots
+    /// report their old position until the recording lookup and stream
+    /// restart finish, so a second ⏭ within that window would pick the same
+    /// event again.
+    seek_target: Cell<Option<(i64, std::time::Instant)>>,
     /// `(mode, paused)` the controls were last refreshed for.
     shown_state: Cell<Option<(Mode, bool)>>,
     keys_installed: Cell<bool>,
@@ -703,6 +712,8 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>, grid: &Rc<Grid>) -> gtk
         zoom_label,
         tracking_box,
         tracking_cam,
+        prev_button: prev_button.clone(),
+        next_button: next_button.clone(),
         pause_button,
         pause_icon,
         speed_dropdown,
@@ -726,6 +737,7 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>, grid: &Rc<Grid>) -> gtk
         fetching: Cell::new(false),
         fetch_generation: Cell::new(0),
         last_position_ms: Cell::new(None),
+        seek_target: Cell::new(None),
         shown_state: Cell::new(None),
         keys_installed: Cell::new(false),
         me: std::cell::OnceCell::new(),
@@ -746,8 +758,12 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>, grid: &Rc<Grid>) -> gtk
     }
     on_click!(zoom_out_button, |t| t.zoom_by(1));
     on_click!(zoom_in_button, |t| t.zoom_by(-1));
-    on_click!(prev_button, |t| t.jump_event(-1));
-    on_click!(next_button, |t| t.jump_event(1));
+    on_click!(prev_button, |t| {
+        t.jump_event(-1);
+    });
+    on_click!(next_button, |t| {
+        t.jump_event(1);
+    });
     on_click!(back_button, |t| t.step(-10));
     on_click!(forward_button, |t| t.step(10));
     on_click!(prev_day_button, |t| t.shift_days(-1));
@@ -1056,6 +1072,18 @@ impl Timeline {
             }
             None => self.tracking_box.set_visible(false),
         }
+        let (prev_tip, next_tip) = match self.jump_camera() {
+            Some(cam) => (
+                format!("Previous event · {}", cam.name),
+                format!("Next event · {}", cam.name),
+            ),
+            None => (
+                "Previous event · any camera".to_string(),
+                "Next event · any camera".to_string(),
+            ),
+        };
+        self.prev_button.set_tooltip_text(Some(&prev_tip));
+        self.next_button.set_tooltip_text(Some(&next_tip));
 
         set_class(&self.pause_button, "on", pb.paused);
         self.pause_icon
@@ -1169,8 +1197,23 @@ impl Timeline {
             });
         }
         self.last_position_ms.set(Some(t * 1000));
+        self.seek_target.set(Some((t, std::time::Instant::now())));
         self.grid.seek(t);
         self.refresh_controls();
+    }
+
+    /// The position ⏮ / ⏭ step from: the stream's, unless a seek requested
+    /// in the last few seconds has not shown up in it yet.
+    fn jump_origin(&self, stream_pos: i64) -> i64 {
+        match self.seek_target.get() {
+            Some((t, at))
+                if at.elapsed() < std::time::Duration::from_secs(4)
+                    && (stream_pos - t).abs() > 2 =>
+            {
+                t
+            }
+            _ => stream_pos,
+        }
     }
 
     fn go_live(&self) {
@@ -1209,39 +1252,77 @@ impl Timeline {
 
     /// Previous/Next event start, among the tracked camera's events when a
     /// slot is selected, else any camera's; only kinds the filter shows.
-    fn jump_event(&self, direction: i32) {
+    /// The camera ⏮ / ⏭ walk: the tracked one while a slot is selected
+    /// (or focused), else every lane.
+    fn jump_camera(&self) -> Option<Camera> {
+        let s = self.store.get();
+        (s.selected_slot.is_some() || s.focused_slot.is_some())
+            .then(|| self.grid.tracked_camera())
+            .flatten()
+    }
+
+    /// ⏮ / ⏭: seek to the nearest loaded event start before/after the
+    /// position, every kind the filter shows. Returns the target.
+    fn jump_event(&self, direction: i32) -> Option<i64> {
         let pb = self.grid.playback();
-        let pos = self.position_ms(&pb) / 1000;
-        let camera = self
-            .store
-            .get()
-            .selected_slot
-            .and_then(|_| self.grid.tracked_camera().map(|c| c.id));
+        let pos = self.jump_origin(self.position_ms(&pb) / 1000);
+        let camera = self.jump_camera();
+        let camera_id = camera.as_ref().map(|c| c.id);
         let filter = self.filter.get();
         let target = {
             let cache = self.cache.borrow();
             let (from, to) = cache.span().unwrap_or((pos, pos));
-            let starts: Vec<i64> = cache
-                .events(from, to)
+            let events = cache.events(from, to);
+            let starts: Vec<i64> = events
                 .iter()
-                .filter(|e| camera.is_none_or(|c| e.camera_id == c))
+                .filter(|e| camera_id.is_none_or(|c| e.camera_id == c))
                 .filter(|e| filter.shows(e.kind))
                 .map(|e| e.start)
                 .collect();
-            if direction < 0 {
+            let target = if direction < 0 {
                 prev_start(&starts, pos)
             } else {
                 next_start(&starts, pos)
-            }
+            };
+            let per_kind: Vec<String> = Kind::ALL
+                .iter()
+                .map(|k| {
+                    let n = events
+                        .iter()
+                        .filter(|e| e.kind == *k && camera_id.is_none_or(|c| e.camera_id == c))
+                        .count();
+                    format!("{}={n}", k.key())
+                })
+                .collect();
+            tracing::debug!(
+                "jump {}: pos {} camera {:?} loaded {}..{} candidates {} ({}) filter {:?} → {:?}",
+                if direction < 0 { "prev" } else { "next" },
+                pos,
+                camera_id,
+                from,
+                to,
+                starts.len(),
+                per_kind.join(" "),
+                filter.kinds,
+                target
+            );
+            target
         };
         match target {
             Some(t) => self.seek_to(t),
-            None => self.store.toast(if direction < 0 {
-                "No earlier event loaded · pan back to load more"
-            } else {
-                "No later event loaded"
-            }),
+            None => {
+                let scope = match &camera {
+                    Some(c) => format!(" on {}", c.name),
+                    None => String::new(),
+                };
+                self.store.toast(if direction < 0 {
+                    format!("No earlier event loaded{scope} · pan back to load more")
+                } else {
+                    format!("No later event loaded{scope}")
+                });
+            }
         }
+        target
     }
 
     fn set_filter(&self, f: Filter) {
@@ -1912,7 +1993,7 @@ impl Timeline {
 /// Driver entry point (`crates/synoptic/src/driver.rs`): `None` when `cmd`
 /// is not a timeline command.
 pub fn driver_command(cmd: &str, args: &[&str]) -> Option<Result<String, String>> {
-    const COMMANDS: [&str; 9] = [
+    const COMMANDS: [&str; 11] = [
         "seek",
         "golive",
         "zoom",
@@ -1922,6 +2003,8 @@ pub fn driver_command(cmd: &str, args: &[&str]) -> Option<Result<String, String>
         "tl-hover",
         "tl-state",
         "tl-date",
+        "tl-events",
+        "tl-jump",
     ];
     if !COMMANDS.contains(&cmd) {
         return None;
@@ -2037,6 +2120,56 @@ impl Timeline {
                 self.set_picker(secs);
                 self.go_to_picked();
                 Ok(format!("picked {}", self.picked_secs().unwrap_or(0)))
+            }
+            "tl-jump" => {
+                let dir = match args.first().copied() {
+                    Some("prev") => -1,
+                    Some("next") => 1,
+                    _ => return Err("usage: tl-jump <prev|next>".into()),
+                };
+                Ok(match self.jump_event(dir) {
+                    Some(t) => format!("{} ({})", t, format_readout(&local_from_secs(t))),
+                    None => "none".to_string(),
+                })
+            }
+            "tl-events" => {
+                // the loaded marks around the position: `camera kind start end`
+                let n = args
+                    .first()
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(20);
+                let pb = self.grid.playback();
+                let pos = self.position_ms(&pb) / 1000;
+                let cache = self.cache.borrow();
+                let (from, to) = cache.span().unwrap_or((pos, pos));
+                let events = cache.events(from, to);
+                let i = events.partition_point(|e| e.start <= pos);
+                let lo = i.saturating_sub(n / 2);
+                let lines: Vec<String> = events
+                    .iter()
+                    .skip(lo)
+                    .take(n)
+                    .map(|e| {
+                        format!(
+                            "  {} {} {} {}{}",
+                            e.camera_id,
+                            e.kind.key(),
+                            format_readout(&local_from_secs(e.start)),
+                            format_readout(&local_from_secs(e.end)),
+                            if e.start <= pos && pos < e.end {
+                                " <"
+                            } else {
+                                ""
+                            }
+                        )
+                    })
+                    .collect();
+                Ok(format!(
+                    "{} events loaded, pos {}\n{}",
+                    events.len(),
+                    format_readout(&local_from_secs(pos)),
+                    lines.join("\n")
+                ))
             }
             "tl-state" => {
                 let pb = self.grid.playback();

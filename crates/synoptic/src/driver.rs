@@ -55,6 +55,8 @@
 //! | `tl-hover <frac 0..1> <lane\|ruler\|off>` | fake a pointer position (tooltip bubble) |
 //! | `tl-date <YYYY-MM-DD> <HH:MM>` | set the date picker and go |
 //! | `tl-state` | print mode, position, window, zoom, lanes, cached events |
+//! | `tl-events [n]` | list up to `n` loaded event marks around the position (`camera kind start end`) |
+//! | `tl-jump <prev\|next>` | what the ⏮ / ⏭ buttons do; prints the new position |
 
 use std::rc::Rc;
 

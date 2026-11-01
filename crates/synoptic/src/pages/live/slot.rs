@@ -69,6 +69,9 @@ pub struct Slot {
     advancing: Cell<bool>,
     /// Bumped whenever the stream is (re)started so stale async results are ignored.
     generation: Cell<u64>,
+    /// Bumped per `seek`: recording lookups finish in any order, and only
+    /// the newest target may be applied.
+    seek_serial: Cell<u64>,
     retry: RefCell<Option<glib::SourceId>>,
 }
 
@@ -224,6 +227,7 @@ impl Slot {
             paused: Cell::new(false),
             advancing: Cell::new(false),
             generation: Cell::new(0),
+            seek_serial: Cell::new(0),
             retry: RefCell::new(None),
         });
 
@@ -564,6 +568,8 @@ impl Slot {
             return;
         };
         let generation = self.generation.get();
+        let serial = self.seek_serial.get() + 1;
+        self.seek_serial.set(serial);
         let fut = self
             .services
             .run(bridge::find_recording(client, camera_id, target_secs));
@@ -571,7 +577,10 @@ impl Slot {
         glib::spawn_future_local(async move {
             let found = fut.await;
             let Some(slot) = w.upgrade() else { return };
-            if slot.generation.get() != generation || slot.camera_id() != Some(camera_id) {
+            if slot.generation.get() != generation
+                || slot.seek_serial.get() != serial
+                || slot.camera_id() != Some(camera_id)
+            {
                 return;
             }
             match found {
