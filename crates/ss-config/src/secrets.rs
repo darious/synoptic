@@ -106,12 +106,32 @@ pub trait SecretStore: Send + Sync {
 pub struct KeyringStore;
 
 impl KeyringStore {
+    /// Linux/BSD: the Secret Service backend explicitly, whatever else the
+    /// crate was built with.
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    ))]
     fn entry(profile: &str, field: CredentialField) -> Result<Entry, SecretError> {
         let user = keyring_user(profile, field);
         let credential = keyring::secret_service::default_credential_builder()
             .build(None, KEYRING_SERVICE, &user)
             .map_err(|e| SecretError::from_keyring(profile, e))?;
         Ok(Entry::new_with_credential(credential))
+    }
+
+    /// macOS Keychain / Windows Credential Manager: the platform default.
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    )))]
+    fn entry(profile: &str, field: CredentialField) -> Result<Entry, SecretError> {
+        let user = keyring_user(profile, field);
+        Entry::new(KEYRING_SERVICE, &user).map_err(|e| SecretError::from_keyring(profile, e))
     }
 
     fn read(profile: &str, field: CredentialField) -> Result<Option<String>, SecretError> {
