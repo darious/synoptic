@@ -620,17 +620,10 @@ pub fn open(
         dialog.window.add_controller(keys);
     }
 
-    // tear down with the window
+    // tear down with the dialog
     {
         let p = player.clone();
-        dialog.window.connect_close_request(move |_| {
-            p.shutdown();
-            glib::Propagation::Proceed
-        });
-    }
-    {
-        let p = player.clone();
-        dialog.window.connect_destroy(move |_| p.shutdown());
+        dialog.window.connect_closed(move || p.shutdown());
     }
 
     // go

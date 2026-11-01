@@ -22,6 +22,9 @@ pub fn build(store: &Rc<Store>) -> gtk::Revealer {
     let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
     panel.add_css_class("camera-panel");
     panel.set_width_request(240);
+    // fixed-width column: never share spare width with the stage
+    panel.set_hexpand(false);
+    revealer.set_hexpand(false);
 
     // header: CAMERAS  5/6            hint
     let head = gtk::Box::new(gtk::Orientation::Horizontal, 6);

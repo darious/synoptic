@@ -15,7 +15,7 @@
 //!
 //! | command | effect |
 //! |---|---|
-//! | `shot <path.png>` | render every visible toplevel; dialogs get `-2`, `-3`… suffixes, open popovers `-popover`, `-popover2`… |
+//! | `shot <path.png>` | render every visible toplevel (dialogs are overlays inside the main window, so they are in the main shot); open popovers get `-popover`, `-popover2`… |
 //! | `login <profile> <host> <port> <user> <password> [otp]` | plain-HTTP login, like the dialog |
 //! | `logout` | sign out |
 //! | `page <live\|recordings\|snapshots\|events\|timelapse\|licenses\|settings\|about>` | switch page |
