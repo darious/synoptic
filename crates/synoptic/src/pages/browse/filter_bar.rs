@@ -11,7 +11,7 @@ use gtk::prelude::*;
 use super::{Browse, EventType, Preset};
 use crate::icons;
 use crate::state::Page;
-use crate::widgets::controls::{chip, chip_with_dot, divider_v, label, set_class, spacer};
+use crate::widgets::controls::{chip, chip_with_dot, label, set_class, spacer};
 
 pub fn build(ctx: &Rc<Browse>) -> gtk::Widget {
     let bar = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -36,9 +36,20 @@ pub fn build(ctx: &Rc<Browse>) -> gtk::Widget {
         preset_chips.push((p, c));
     }
 
+    // Events: the type chips get their own wrapping line under the presets,
+    // so the bar never forces the window wider than a small screen
     let mut type_chips = Vec::new();
+    let types = gtk::FlowBox::new();
+    types.add_css_class("filter-row");
+    types.add_css_class("type-row");
+    types.set_selection_mode(gtk::SelectionMode::None);
+    types.set_max_children_per_line(32);
+    types.set_column_spacing(6);
+    types.set_row_spacing(6);
+    types.set_homogeneous(false);
+    types.set_halign(gtk::Align::Start);
+    types.set_visible(ctx.page == Page::Events);
     if ctx.page == Page::Events {
-        row.append(&divider_v());
         for t in EventType::ALL {
             let c = chip_with_dot(t.label(), &format!("bg-{}", t.css()));
             {
@@ -55,7 +66,7 @@ pub fn build(ctx: &Rc<Browse>) -> gtk::Widget {
                     ctx.filter_changed();
                 });
             }
-            row.append(&c);
+            types.insert(&c, -1);
             type_chips.push((t, c));
         }
     }
@@ -124,6 +135,7 @@ pub fn build(ctx: &Rc<Browse>) -> gtk::Widget {
     }
     row.append(&reset);
     bar.append(&row);
+    bar.append(&types);
 
     // ----- advanced row ------------------------------------------------------
     let adv = gtk::Box::new(gtk::Orientation::Horizontal, 8);

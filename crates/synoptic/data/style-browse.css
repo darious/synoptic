@@ -67,3 +67,7 @@ button.cam-chip.selected { border-color: var(--blue); background-color: var(--bl
 .viewer-area { background-color: var(--player-bg); }
 .viewer-area picture { background-color: var(--player-bg); }
 .viewer-zoom { margin: 0 0 10px 10px; }
+/* Events: second filter line with the type chips (a wrapping FlowBox) */
+.filter-bar .type-row { padding: 0 12px 8px; }
+.filter-bar .type-row > flowboxchild { padding: 0; }
+.filter-bar .type-row > flowboxchild:focus { outline: none; }
