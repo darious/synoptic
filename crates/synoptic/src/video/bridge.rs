@@ -181,6 +181,29 @@ struct Inner {
     muted: Cell<bool>,
     /// Local gain, re-applied to every rebuilt pipeline.
     volume: Cell<f64>,
+    /// `SYNOPTIC_VIDEO_DUMP=<dir>`: the first access units of this stream
+    /// as an Annex-B file, to replay a camera's stream offline.
+    dump: RefCell<Option<(std::fs::File, usize)>>,
+}
+
+/// Access units written per stream when dumping.
+const VIDEO_DUMP_AUS: usize = 400;
+
+fn open_video_dump(source: &StreamSource) -> Option<(std::fs::File, usize)> {
+    let dir = std::env::var_os("SYNOPTIC_VIDEO_DUMP")?;
+    let name = match source {
+        StreamSource::Live { camera_id, .. } => format!("live-{camera_id}"),
+        StreamSource::History { recording, .. } => format!("rec-{}", recording.id),
+    };
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let path = std::path::Path::new(&dir).join(format!("{name}-{stamp}.bin"));
+    std::fs::create_dir_all(&dir).ok()?;
+    let f = std::fs::File::create(&path).ok()?;
+    tracing::info!("video dump: {}", path.display());
+    Some((f, VIDEO_DUMP_AUS))
 }
 
 impl Inner {
@@ -283,6 +306,7 @@ impl VideoStream {
             dead: Cell::new(false),
             muted: Cell::new(true), // --- audio ---
             volume: Cell::new(1.0),
+            dump: RefCell::new(open_video_dump(&source)),
         });
         inner.rebuild_pipeline(initial_codec);
 
@@ -454,6 +478,13 @@ async fn receive(inner: Weak<Inner>, rx: async_channel::Receiver<Msg>) {
                 }
             },
             Msg::Video(au, msec) => {
+                if let Some((f, left)) = &mut *inner.dump.borrow_mut()
+                    && *left > 0
+                {
+                    use std::io::Write;
+                    *left -= 1;
+                    let _ = f.write_all(&au);
+                }
                 if let Some(p) = &*inner.pipeline.borrow()
                     && let Err(e) = p.push(au)
                     && e != gstreamer::FlowError::Flushing
