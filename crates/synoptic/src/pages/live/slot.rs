@@ -46,6 +46,7 @@ pub struct Slot {
     toolbar: gtk::Box,
     ptz_group: gtk::Box,
     mute_icon: gtk::Image,
+    focus_button: gtk::Button,
     empty_box: gtk::Box,
     empty_hint: gtk::Label,
     offline_label: gtk::Label,
@@ -53,6 +54,8 @@ pub struct Slot {
     camera: RefCell<Option<Camera>>,
     status: Cell<Status>,
     selected: Cell<bool>,
+    /// Shown alone (double-click / "Fill view").
+    focused: Cell<bool>,
     hovered: Cell<bool>,
     muted: Cell<bool>,
     stream: RefCell<Option<VideoStream>>,
@@ -68,6 +71,9 @@ pub struct Slot {
     generation: Cell<u64>,
     retry: RefCell<Option<glib::SourceId>>,
 }
+
+const FOCUS_TOOLTIP: &str = "Fill the view with this camera (double-click)";
+const UNFOCUS_TOOLTIP: &str = "Back to the layout (double-click)";
 
 /// History: no frame for this long while the position sits at the end of
 /// the file counts as "the recording ended" even without a close notice.
@@ -158,13 +164,13 @@ impl Slot {
         ptz_button.set_widget_name(&format!("slot-{index}-ptz"));
         ptz_button.set_valign(gtk::Align::Center);
         ptz_group.append(&ptz_button);
-        let single_button = icons::flat_button("open_in_full", "icon-30", "Open in 1×1");
-        single_button.set_widget_name(&format!("slot-{index}-single"));
+        let focus_button = icons::flat_button("open_in_full", "icon-30", FOCUS_TOOLTIP);
+        focus_button.set_widget_name(&format!("slot-{index}-focus"));
         toolbar.append(&mute_button);
         toolbar.append(&snapshot_button);
         toolbar.append(&ptz_group);
         toolbar.append(&divider_v());
-        toolbar.append(&single_button);
+        toolbar.append(&focus_button);
         root.add_overlay(&toolbar);
 
         // empty state
@@ -202,12 +208,14 @@ impl Slot {
             toolbar,
             ptz_group,
             mute_icon,
+            focus_button: focus_button.clone(),
             empty_box,
             empty_hint,
             offline_label,
             camera: RefCell::new(None),
             status: Cell::new(Status::Empty),
             selected: Cell::new(false),
+            focused: Cell::new(false),
             hovered: Cell::new(false),
             muted: Cell::new(true),
             stream: RefCell::new(None),
@@ -241,14 +249,19 @@ impl Slot {
         }
         slot.root.add_controller(motion);
 
-        // click selects (click again deselects)
+        // click selects (click again deselects); double-click fills the
+        // view with this slot, or returns to the layout when it already does
         let click = gtk::GestureClick::new();
         click.set_button(gtk::gdk::BUTTON_PRIMARY);
         {
             let w = Rc::downgrade(&slot);
-            click.connect_released(move |gesture, _, _, _| {
+            click.connect_released(move |gesture, n_press, _, _| {
                 let Some(s) = w.upgrade() else { return };
                 gesture.set_state(gtk::EventSequenceState::Claimed);
+                if n_press >= 2 {
+                    s.toggle_focus();
+                    return;
+                }
                 let index = s.index;
                 s.store.update(Change::SelectedSlot, |st| {
                     st.selected_slot = if st.selected_slot == Some(index) {
@@ -285,11 +298,9 @@ impl Slot {
         }
         {
             let w = Rc::downgrade(&slot);
-            single_button.connect_clicked(move |_| {
-                if let Some(s) = w.upgrade()
-                    && let Some(id) = s.camera_id()
-                {
-                    s.store.emit(&Change::RequestOpenSingle(id));
+            focus_button.connect_clicked(move |_| {
+                if let Some(s) = w.upgrade() {
+                    s.toggle_focus();
                 }
             });
         }
@@ -417,6 +428,33 @@ impl Slot {
         if self.selected.replace(selected) != selected {
             self.refresh();
         }
+    }
+
+    /// Grid → slot: this slot is (no longer) shown alone.
+    pub fn set_focused(&self, focused: bool) {
+        if self.focused.replace(focused) != focused {
+            let (icon, tip) = if focused {
+                ("close_fullscreen", UNFOCUS_TOOLTIP)
+            } else {
+                ("open_in_full", FOCUS_TOOLTIP)
+            };
+            self.focus_button
+                .set_child(Some(&icons::image(icon, icons::icon_px("icon-30"))));
+            self.focus_button.set_tooltip_text(Some(tip));
+            self.refresh();
+        }
+    }
+
+    /// Double-click / toolbar: fill the view with this slot, or go back to
+    /// the layout. Empty slots cannot be focused.
+    fn toggle_focus(&self) {
+        if self.camera_id().is_none() && !self.focused.get() {
+            return;
+        }
+        let index = self.index;
+        self.store
+            .update(Change::FocusedSlot, |st| st.toggle_focus(index));
+        self.store.emit(&Change::SelectedSlot);
     }
 
     /// Assign (or clear) the camera. Restarts the stream only when the
@@ -696,27 +734,7 @@ impl Slot {
     // --- streams -----------------------------------------------------------
 
     fn auth(&self) -> Option<StreamAuth> {
-        let (base_url, sid) = self.services.stream_auth()?;
-        let profile = self
-            .store
-            .get()
-            .connection
-            .as_ref()
-            .map(|c| c.profile.clone());
-        let insecure = profile
-            .and_then(|name| {
-                self.store
-                    .config()
-                    .profiles
-                    .get(&name)
-                    .map(|p| !p.verify_ssl)
-            })
-            .unwrap_or(true);
-        Some(StreamAuth {
-            base_url,
-            sid,
-            insecure,
-        })
+        StreamAuth::from_session(&self.store, &self.services)
     }
 
     fn stop_stream(&self) {
@@ -1020,6 +1038,7 @@ impl Slot {
         set_class(&self.root, "empty", status == Status::Empty);
         set_class(&self.root, "offline", status == Status::Offline);
         set_class(&self.root, "selected", self.selected.get());
+        set_class(&self.root, "focused", self.focused.get());
 
         self.empty_box.set_visible(status == Status::Empty);
         self.empty_hint.set_text(if self.selected.get() {

@@ -29,6 +29,7 @@
 //! | `swap <slot> <slot>` | what dropping a slot on another slot does |
 //! | `reorder <camera_id> <before_camera_id\|end>` | what dropping a panel row on another row does |
 //! | `select <index\|none>` | select a slot |
+//! | `focus <index\|none>` | what double-clicking a slot does: show it alone (one timeline lane), or back to the layout |
 //! | `theme <dark\|light>`, `panel <on\|off>`, `timeline <on\|off>` | shell toggles |
 //! | `click <widget-name>` | activate a named widget (button, menu button, toggle, row) |
 //! | `type <widget-name> <text…>` | set an entry's text |
@@ -360,6 +361,21 @@ async fn run(
             };
             store.update(Change::SelectedSlot, |s| s.selected_slot = sel);
             Ok(String::new())
+        }
+        "focus" => {
+            let v = args.first().ok_or("usage: focus <index|none>")?;
+            if *v == "none" {
+                store.update(Change::FocusedSlot, |s| s.focused_slot = None);
+            } else {
+                let i = v.parse::<usize>().map_err(|_| "bad index")?;
+                store.update(Change::FocusedSlot, |s| {
+                    if s.focused_slot != Some(i) {
+                        s.toggle_focus(i);
+                    }
+                });
+            }
+            store.emit(&Change::SelectedSlot);
+            Ok(format!("{:?}", store.get().focused_slot))
         }
         "theme" => {
             let t = match args.first().copied() {

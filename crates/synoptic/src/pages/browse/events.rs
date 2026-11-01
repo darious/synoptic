@@ -241,7 +241,7 @@ fn row(ctx: &Rc<Browse>, ev: &EventRow) -> gtk::Widget {
 
     row.append(&spacer());
 
-    let play_btn = icons::bordered_button("play_arrow_fill", "icon-34", "Play");
+    let play_btn = icons::bordered_button("play_arrow-fill", "icon-34", "Play");
     play_btn.add_css_class("row-actions");
     {
         let ctx = ctx.clone();

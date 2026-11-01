@@ -39,7 +39,7 @@ pub fn bordered_button(material: &str, size_class: &str, tooltip: &str) -> gtk::
     b
 }
 
-fn icon_px(size_class: &str) -> i32 {
+pub fn icon_px(size_class: &str) -> i32 {
     match size_class {
         "icon-32" => 18,
         "icon-34" | "icon-28" | "icon-24" => 16,

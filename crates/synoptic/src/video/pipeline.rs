@@ -137,6 +137,7 @@ pub struct Pipeline {
     /// Set by the bus watch when an audio element errored: pushes stop.
     audio_dead: Arc<AtomicBool>,
     muted: bool,
+    volume: f64,
     _bus_watch: Option<gst::bus::BusWatchGuard>,
 }
 
@@ -313,6 +314,7 @@ impl Pipeline {
             audio: None,
             audio_dead,
             muted: true,
+            volume: 1.0,
             _bus_watch: bus_watch,
         })
     }
@@ -350,6 +352,14 @@ impl Pipeline {
         }
     }
 
+    /// Audio gain 0.0–1.0 (also applied when the branch is built later).
+    pub fn set_volume(&mut self, volume: f64) {
+        self.volume = volume.clamp(0.0, 1.0);
+        if let Some(a) = &self.audio {
+            a.volume.set_property("volume", self.volume);
+        }
+    }
+
     /// Push one audio frame (ADTS AAC or raw µ-law), building the branch on
     /// first use. Silently dropped after an audio element error.
     pub fn push_audio(
@@ -358,6 +368,13 @@ impl Pipeline {
         frame: Vec<u8>,
     ) -> Result<(), gst::FlowError> {
         if self.audio_dead.load(Ordering::Relaxed) {
+            // the bus watch saw an audio error: say which link had what
+            // caps (negotiation failures are otherwise opaque), then drop
+            // the branch
+            if let Some(a) = &self.audio {
+                tracing::warn!("audio branch after error: {}", describe_branch(a));
+            }
+            self.remove_audio();
             return Ok(());
         }
         if self.audio.as_ref().is_none_or(|a| a.format != format) {
@@ -410,6 +427,7 @@ impl Pipeline {
         let volume = gst::ElementFactory::make("volume")
             .name(format!("{AUDIO_PREFIX}volume"))
             .property("mute", self.muted)
+            .property("volume", self.volume)
             .build()?;
         elements.push(volume.clone());
         elements.push(audio_sink()?);
@@ -545,6 +563,24 @@ fn is_audio(obj: &gst::Object) -> bool {
         cur = o.parent();
     }
     false
+}
+
+/// One line per element: `name[src caps]`, for the audio error log.
+fn describe_branch(a: &AudioBranch) -> String {
+    let parts: Vec<String> = a
+        .elements
+        .iter()
+        .map(|el| {
+            let caps = el
+                .static_pad("src")
+                .and_then(|p| p.current_caps())
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "no caps".to_string());
+            let state = el.current_state();
+            format!("{} {:?} [{}]", el.name(), state, caps)
+        })
+        .collect();
+    format!("{:?}: {}", a.format, parts.join(" → "))
 }
 
 /// `autoaudiosink (pulsesink)` / `fakesink`: the factory, and the child an

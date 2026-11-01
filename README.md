@@ -14,7 +14,8 @@ has not yet been exercised against a real NAS. Expect rough edges.
 
 - Live View: any grid from 1×1 to 4×4 (2×3, 3×2, …) plus 1+5 and 1+7 shapes,
   several named layouts per NAS, drag and drop between the camera list and
-  slots, PTZ pad with presets, snapshots, audio.
+  slots, double-click a camera to fill the view with it (and its timeline
+  lane alone) and again to return, PTZ pad with presets, snapshots, audio.
 - Timeline under the grid: one lane per camera with recordings and
   colour-coded motion, alarm and manual events, 5 min to 24 h zoom, pan back
   through days, click or drag to seek every slot, event filter, date picker,

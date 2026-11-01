@@ -43,6 +43,9 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 - This box is a headless tty: test the UI with `tools/ui.sh` (GTK Broadway + the driver in `crates/synoptic/src/driver.rs`), never by hand-waving. Agents must look at the `.small.png` screenshots before reporting UI work done.
 - `tools/ui.sh` starts the app with `DBUS_SESSION_BUS_ADDRESS=disabled:`; without it a second `synoptic` becomes a GApplication remote of a running instance and exits 0 with an empty log. `shot` can report "nothing to render" while video is drawing — retry.
 - Video: `decodebin3` picks `vah264dec`, whose NV12/VAMemory output does not negotiate with `gtk4paintablesink` when the sink has no GL context; keep `videoconvert` (and `vapostproc` when available) in front of the sink, and the software-decoder fallback in `video/pipeline.rs`.
+- Recording/event playback (`dialogs/player.rs`) goes over MixStream (`stmSrc=2`, then `action=play … stmSrc=1`), the same path as Live View history and the one the Synology client uses; the HTTP `EventStream` URL is only used for time-lapse (`playbin3`). A real DSM answered `EventStream` with an empty body ("Stream doesn't contain enough data").
+- Icon names mirror `data/icons/ms-<name>-symbolic.svg`; filled variants are `<name>-fill` (e.g. `play_arrow-fill`), never `_fill`. A wrong name silently renders GTK's broken-image glyph, so check new icons on a screenshot.
+- Live View focus: double-click (or the slot's "Fill view" button, driver `focus <i>`) shows one slot alone with one timeline lane; the other slots stay mounted and streaming, hidden, so the layout returns instantly. Escape or another double-click goes back.
 - GTK4/GStreamer dev packages are installed; libmpv is not (ss-play uses the `mpv` binary).
 - Thread-local `SERVICES` in `widgets/popovers.rs` and the raw `ApiRequest`s in
   `pages/browse/{recordings,timelapse}.rs` (GetThumbnail, TimeLapse) are known shortcuts.

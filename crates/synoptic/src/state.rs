@@ -451,6 +451,10 @@ pub struct AppState {
     /// Camera panel order (camera ids); cameras not listed follow in NAS order.
     pub camera_order: Vec<i64>,
     pub selected_slot: Option<usize>,
+    /// Live View: slot shown alone (double-click / "Fill view"); the other
+    /// slots stay mounted but hidden so the layout comes back instantly.
+    /// Runtime only, cleared by any layout change.
+    pub focused_slot: Option<usize>,
     pub home_mode: bool,
     pub unread_notifications: u32,
     pub update_notice_unread: bool,
@@ -526,6 +530,17 @@ impl AppState {
         true
     }
 
+    /// Double-click / "Fill view": show `index` alone, or back to the layout
+    /// when it is already focused. Focusing also selects the slot.
+    pub fn toggle_focus(&mut self, index: usize) {
+        if self.focused_slot == Some(index) {
+            self.focused_slot = None;
+        } else if index < self.shape().slots() {
+            self.focused_slot = Some(index);
+            self.selected_slot = Some(index);
+        }
+    }
+
     /// Change the active layout's shape, keeping cameras in slot order.
     pub fn set_shape(&mut self, shape: Shape) {
         self.ensure_layout();
@@ -533,6 +548,7 @@ impl AppState {
             l.set_shape(shape);
         }
         self.selected_slot = None;
+        self.focused_slot = None;
     }
 
     /// Add a layout after the active one and make it active. The name is
@@ -548,6 +564,7 @@ impl AppState {
         self.layouts.insert(at, l);
         self.active_layout = at;
         self.selected_slot = None;
+        self.focused_slot = None;
         at
     }
 
@@ -566,6 +583,7 @@ impl AppState {
         );
         self.active_layout = at;
         self.selected_slot = None;
+        self.focused_slot = None;
         Some(at)
     }
 
@@ -577,6 +595,7 @@ impl AppState {
         self.layouts.remove(self.active_layout);
         self.active_layout = self.active_layout.min(self.layouts.len() - 1);
         self.selected_slot = None;
+        self.focused_slot = None;
         true
     }
 
@@ -608,6 +627,7 @@ impl AppState {
             l.cameras.iter_mut().for_each(|c| *c = 0);
         }
         self.selected_slot = None;
+        self.focused_slot = None;
     }
 
     /// Switch to layout `index` (clamped).
@@ -616,6 +636,7 @@ impl AppState {
             self.active_layout = index.min(self.layouts.len() - 1);
         }
         self.selected_slot = None;
+        self.focused_slot = None;
     }
 
     fn ensure_layout(&mut self) {
@@ -698,8 +719,8 @@ pub enum Change {
     CameraSettings(i64),
     /// Live View: reload every stream.
     RequestReload,
-    /// Live View: open camera in a 1×1 standalone view.
-    RequestOpenSingle(i64),
+    /// Live View: `focused_slot` changed.
+    FocusedSlot,
     /// Live View: show the timeline at `(unix seconds, camera id)` and
     /// seek every slot there (from the Events page).
     RequestSeek(i64, i64),
@@ -747,6 +768,7 @@ impl Store {
             active_layout: 0,
             camera_order: Vec::new(),
             selected_slot: None,
+            focused_slot: None,
             home_mode: false,
             unread_notifications: 0,
             update_notice_unread: false,
@@ -925,6 +947,7 @@ mod tests {
             active_layout: 0,
             camera_order: Vec::new(),
             selected_slot: None,
+            focused_slot: None,
             home_mode: false,
             unread_notifications: 0,
             update_notice_unread: false,
@@ -956,6 +979,26 @@ mod tests {
         }
         assert_eq!(Shape::from_key("5x5"), None);
         assert_eq!(ss_config::LAYOUT_SHAPES.len(), Shape::ALL.len());
+    }
+
+    #[test]
+    fn focus_toggles_selects_and_is_cleared_by_layout_changes() {
+        let mut s = state(6);
+        s.add_layout("Default", Shape::S2x3, true);
+        s.toggle_focus(4);
+        assert_eq!(s.focused_slot, Some(4));
+        assert_eq!(s.selected_slot, Some(4));
+        s.toggle_focus(4);
+        assert_eq!(s.focused_slot, None);
+        // out of range: ignored
+        s.toggle_focus(6);
+        assert_eq!(s.focused_slot, None);
+        s.toggle_focus(1);
+        s.set_shape(Shape::S3x3);
+        assert_eq!(s.focused_slot, None);
+        s.toggle_focus(1);
+        s.add_layout("Other", Shape::S1x1, true);
+        assert_eq!(s.focused_slot, None);
     }
 
     #[test]

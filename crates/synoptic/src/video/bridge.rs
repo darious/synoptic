@@ -41,6 +41,26 @@ pub struct StreamAuth {
     pub insecure: bool,
 }
 
+impl StreamAuth {
+    /// From the live session: the client's base URL and `_sid`, and the
+    /// profile's `verify_ssl`. `None` when logged out.
+    pub fn from_session(
+        store: &crate::state::Store,
+        services: &crate::services::Services,
+    ) -> Option<StreamAuth> {
+        let (base_url, sid) = services.stream_auth()?;
+        let profile = store.get().connection.as_ref().map(|c| c.profile.clone());
+        let insecure = profile
+            .and_then(|name| store.config().profiles.get(&name).map(|p| !p.verify_ssl))
+            .unwrap_or(true);
+        Some(StreamAuth {
+            base_url,
+            sid,
+            insecure,
+        })
+    }
+}
+
 /// The recording a history session plays (from `Recording.List`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HistoryRecording {
@@ -159,6 +179,8 @@ struct Inner {
     dead: Cell<bool>,
     /// --- audio --- slot's mute state, re-applied to every rebuilt pipeline.
     muted: Cell<bool>,
+    /// Local gain, re-applied to every rebuilt pipeline.
+    volume: Cell<f64>,
 }
 
 impl Inner {
@@ -205,6 +227,7 @@ impl Inner {
         match built {
             Ok(mut p) => {
                 p.set_mute(self.muted.get()); // --- audio ---
+                p.set_volume(self.volume.get());
                 if let Some(paintable) = p.paintable() {
                     self.emit(StreamEvent::Paintable(paintable));
                 }
@@ -259,6 +282,7 @@ impl VideoStream {
             on_event: Box::new(on_event),
             dead: Cell::new(false),
             muted: Cell::new(true), // --- audio ---
+            volume: Cell::new(1.0),
         });
         inner.rebuild_pipeline(initial_codec);
 
@@ -313,6 +337,14 @@ impl VideoStream {
         }
         // --- end audio ---
         self.inner.send(Cmd::Mute(mute));
+    }
+
+    /// Local audio gain 0.0–1.0.
+    pub fn set_volume(&self, volume: f64) {
+        self.inner.volume.set(volume);
+        if let Some(p) = &mut *self.inner.pipeline.borrow_mut() {
+            p.set_volume(volume);
+        }
     }
 
     /// History: seek within the current recording.

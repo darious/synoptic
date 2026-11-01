@@ -1,6 +1,8 @@
 //! The Live View grid: slots on black with 1 px gutters laid out by the
-//! active layout's [`Shape`] (spanning cells for `1+n`), selection, and the
-//! playback controller the timeline drives (pause / speed / seek / go live).
+//! active layout's [`Shape`] (spanning cells for `1+n`), selection, focus
+//! (one slot shown alone, the others hidden but still streaming so the
+//! layout comes back instantly) and the playback controller the timeline
+//! drives (pause / speed / seek / go live).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -87,12 +89,12 @@ impl Grid {
                         grid.sync();
                     }
                     Change::SelectedSlot => grid.sync_selection(),
+                    Change::FocusedSlot => grid.sync_focus(),
                     Change::RequestReload => {
                         for slot in grid.slots.borrow().iter() {
                             slot.restart();
                         }
                     }
-                    Change::RequestOpenSingle(id) => grid.open_single(*id),
                     _ => {}
                 }
             });
@@ -135,24 +137,40 @@ impl Grid {
 
     // --- state the timeline reads --------------------------------------------
 
-    /// The slot the timeline tracks: the selected one, else the first filled.
+    /// The slot the timeline tracks: the focused one, else the selected
+    /// one, else the first filled.
     pub fn tracked_slot(&self) -> Option<Rc<Slot>> {
         let slots = self.slots.borrow();
-        let selected = self.store.get().selected_slot;
-        selected
+        let (focused, selected) = {
+            let s = self.store.get();
+            (s.focused_slot, s.selected_slot)
+        };
+        focused
+            .or(selected)
             .and_then(|i| slots.get(i).cloned())
             .filter(|s| s.camera_id().is_some())
             .or_else(|| slots.iter().find(|s| s.camera_id().is_some()).cloned())
+    }
+
+    /// Slots currently shown: all of them, or just the focused one.
+    fn visible_slots(&self) -> Vec<Rc<Slot>> {
+        let focused = self.store.get().focused_slot;
+        self.slots
+            .borrow()
+            .iter()
+            .filter(|s| focused.is_none_or(|f| f == s.index()))
+            .cloned()
+            .collect()
     }
 
     pub fn tracked_camera(&self) -> Option<Camera> {
         self.tracked_slot().and_then(|s| s.camera())
     }
 
-    /// Cameras in the visible layout (for presence row B).
+    /// Cameras on screen (timeline lanes): the layout's, or only the
+    /// focused slot's.
     pub fn camera_ids(&self) -> Vec<i64> {
-        self.slots
-            .borrow()
+        self.visible_slots()
             .iter()
             .filter_map(|s| s.camera_id())
             .collect()
@@ -263,7 +281,33 @@ impl Grid {
             slot.set_selected(selected == Some(slot.index()));
         }
         drop(slots);
+        self.apply_focus();
         self.notify();
+    }
+
+    fn sync_focus(&self) {
+        self.apply_focus();
+        self.notify();
+    }
+
+    /// Show only the focused slot (GTK's homogeneous grid collapses rows and
+    /// columns with no visible child, so it fills the stage). Focus on an
+    /// empty or missing slot is dropped.
+    fn apply_focus(&self) {
+        let focused = self.store.get().focused_slot;
+        let slots = self.slots.borrow();
+        let valid = focused.is_some_and(|f| slots.get(f).is_some_and(|s| s.camera_id().is_some()));
+        if focused.is_some() && !valid {
+            drop(slots);
+            self.store
+                .update(Change::FocusedSlot, |s| s.focused_slot = None);
+            return;
+        }
+        for slot in slots.iter() {
+            let show = focused.is_none_or(|f| f == slot.index());
+            slot.widget().set_visible(show);
+            slot.set_focused(show && focused.is_some());
+        }
     }
 
     fn sync_selection(&self) {
@@ -294,22 +338,6 @@ impl Grid {
             slots.push(slot);
         }
         *self.slots.borrow_mut() = slots;
-    }
-
-    /// `RequestOpenSingle`: switch to (or create) a 1×1 layout with this camera.
-    fn open_single(&self, camera_id: i64) {
-        self.store.update(Change::Layout, |s| {
-            match s.layouts.iter().position(|l| l.shape == Shape::S1x1) {
-                Some(i) => s.activate_layout(i),
-                None => {
-                    s.add_layout("", Shape::S1x1, false);
-                }
-            }
-            s.place_camera(0, camera_id);
-            s.selected_slot = None;
-        });
-        self.store.emit(&Change::Slots);
-        self.store.emit(&Change::SelectedSlot);
     }
 }
 

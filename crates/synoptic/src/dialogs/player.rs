@@ -1,7 +1,13 @@
 //! Player dialog (`min(1100px, 90%)`): header title + mono subtitle,
-//! Download, ✕; 16:9 video via GStreamer `playbin3` →
-//! `gtk4paintablesink` playing `Client::recording_stream_url`; transport
-//! row with play/pause, mono position, seek bar, duration, Volume, Snapshot.
+//! Download, ✕; 16:9 video; transport row with play/pause, mono position,
+//! seek bar, duration, Volume, Snapshot.
+//!
+//! Recordings and events play over the MixStream WebSocket (`stmSrc=2`,
+//! then `action=play … stmSrc=1`), the same path the Live View uses for
+//! history and the one the Synology client takes: the HTTP `EventStream`
+//! URL is not what the official client plays and some DSM builds answer
+//! it with an empty body. Time-lapse files still go through `playbin3` on
+//! `Client::recording_stream_url`.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -11,6 +17,7 @@ use gstreamer::prelude::*;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 use ss_api::Recording;
+use ss_stream::Speed;
 
 use crate::dialogs::shell;
 use crate::icons;
@@ -20,6 +27,8 @@ use crate::pages::browse::{
 };
 use crate::services::Services;
 use crate::state::Store;
+use crate::video::bridge::{HistoryRecording, StreamAuth, StreamEvent, StreamSource, VideoStream};
+use crate::video::pipeline::Codec;
 use crate::widgets::controls::label;
 
 /// Dialog width for a parent window: `min(1100, 90 %)`.
@@ -30,20 +39,35 @@ pub fn dialog_width(parent_width: i32) -> i32 {
     ((parent_width as f64) * 0.9).round().min(1100.0) as i32
 }
 
+/// `Recording.event_type` of a time-lapse file (`to_recording`).
+const TIME_LAPSE: i64 = 3;
+
+enum Backend {
+    /// Recordings and events: MixStream history session.
+    Mix(RefCell<Option<VideoStream>>),
+    /// Time-lapse: `playbin3` on the HTTP stream URL.
+    Playbin(gst::Element),
+    /// Could not be built; the reason is on screen.
+    None,
+}
+
 struct Player {
     store: Rc<Store>,
     rec: Recording,
-    playbin: Option<gst::Element>,
-    paintable: Option<gdk::Paintable>,
+    backend: Backend,
+    paintable: RefCell<Option<gdk::Paintable>>,
     picture: gtk::Picture,
     play_btn: gtk::Button,
     scale: gtk::Scale,
     position: gtk::Label,
     duration: gtk::Label,
     timecode: gtk::Label,
-    error: gtk::Label,
+    notice: gtk::Label,
     playing: Cell<bool>,
     duration_secs: Cell<f64>,
+    position_secs: Cell<f64>,
+    volume: Cell<f64>,
+    /// Playbin: seek to apply once prerolled.
     pending_seek: Cell<Option<f64>>,
     bus_guard: RefCell<Option<gst::bus::BusWatchGuard>>,
     timer: RefCell<Option<glib::SourceId>>,
@@ -52,42 +76,71 @@ struct Player {
 impl Player {
     fn set_playing(&self, on: bool) {
         self.playing.set(on);
-        let icon = if on { "pause_fill" } else { "play_arrow_fill" };
+        let icon = if on { "pause-fill" } else { "play_arrow-fill" };
         self.play_btn.set_child(Some(&icons::image(icon, 16)));
         self.play_btn
             .set_tooltip_text(Some(if on { "Pause" } else { "Play" }));
-        if let Some(p) = &self.playbin {
-            let state = if on {
-                gst::State::Playing
-            } else {
-                gst::State::Paused
-            };
-            if let Err(e) = p.set_state(state) {
-                tracing::warn!("player state change: {e}");
+        match &self.backend {
+            Backend::Mix(stream) => {
+                if let Some(s) = &*stream.borrow() {
+                    if on {
+                        s.resume();
+                    } else {
+                        s.pause();
+                    }
+                }
             }
+            Backend::Playbin(p) => {
+                let state = if on {
+                    gst::State::Playing
+                } else {
+                    gst::State::Paused
+                };
+                if let Err(e) = p.set_state(state) {
+                    tracing::warn!("player state change: {e}");
+                }
+            }
+            Backend::None => {}
         }
     }
 
     fn toggle(&self) {
+        if matches!(self.backend, Backend::None) {
+            return;
+        }
+        let at_end = self.position_secs.get() >= self.duration_secs.get() - 0.5;
+        if !self.playing.get() && at_end {
+            self.seek(0.0);
+        }
         self.set_playing(!self.playing.get());
     }
 
     fn seek(&self, secs: f64) {
-        let Some(p) = &self.playbin else { return };
         let secs = secs.clamp(0.0, self.duration_secs.get().max(0.0));
-        if p.seek_simple(
-            gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-            gst::ClockTime::from_seconds_f64(secs),
-        )
-        .is_err()
-        {
-            // Not seekable yet (still prerolling): retry when ready.
-            self.pending_seek.set(Some(secs));
+        match &self.backend {
+            Backend::Mix(stream) => {
+                if let Some(s) = &*stream.borrow() {
+                    s.seek_ms((secs * 1000.0) as u64);
+                }
+            }
+            Backend::Playbin(p) => {
+                if p.seek_simple(
+                    gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                    gst::ClockTime::from_seconds_f64(secs),
+                )
+                .is_err()
+                {
+                    // Not seekable yet (still prerolling): retry when ready.
+                    self.pending_seek.set(Some(secs));
+                }
+            }
+            Backend::None => return,
         }
         self.show_position(secs);
     }
 
     fn show_position(&self, secs: f64) {
+        self.position_secs.set(secs);
         self.position.set_text(&format_duration(secs as i64));
         self.timecode
             .set_text(&format_local(self.rec.start_time + secs as i64));
@@ -105,9 +158,11 @@ impl Player {
         self.duration.set_text(&format_duration(secs as i64));
     }
 
-    /// Timer tick: pull position / duration from the pipeline.
+    /// Timer tick: pull position / duration from a playbin pipeline.
     fn tick(&self) {
-        let Some(p) = &self.playbin else { return };
+        let Backend::Playbin(p) = &self.backend else {
+            return;
+        };
         if let Some(d) = p.query_duration::<gst::ClockTime>() {
             self.set_duration(d.seconds_f64());
         }
@@ -118,15 +173,122 @@ impl Player {
         }
     }
 
+    /// A line over the video ("Connecting…"); `None` hides it.
+    fn set_notice(&self, text: Option<&str>) {
+        match text {
+            Some(t) => {
+                self.notice.set_text(t);
+                self.notice.set_visible(true);
+            }
+            None => self.notice.set_visible(false),
+        }
+    }
+
     fn show_error(&self, text: &str) {
-        self.error.set_text(text);
-        self.error.set_visible(true);
+        self.set_notice(Some(text));
         self.set_playing(false);
+    }
+
+    fn set_volume(&self, volume: f64) {
+        self.volume.set(volume);
+        match &self.backend {
+            Backend::Mix(stream) => {
+                if let Some(s) = &*stream.borrow() {
+                    s.set_volume(volume);
+                    s.set_mute(volume <= 0.0);
+                }
+            }
+            Backend::Playbin(p) => p.set_property("volume", volume),
+            Backend::None => {}
+        }
+    }
+
+    /// Open the MixStream history session for the recording, starting
+    /// `offset` seconds in.
+    fn start_mix(self: &Rc<Self>, services: &Services, offset: f64) {
+        let Backend::Mix(slot) = &self.backend else {
+            return;
+        };
+        let Some(auth) = StreamAuth::from_session(&self.store, services) else {
+            self.show_error("Not connected");
+            return;
+        };
+        let recording = HistoryRecording::from_api(&self.rec);
+        let codec = self
+            .store
+            .get()
+            .camera(self.rec.camera_id)
+            .map(|c| Codec::from_camera(c.video_codec))
+            .unwrap_or(Codec::H264);
+        let target = self.rec.start_time + offset.max(0.0) as i64;
+        let params = recording.play_params(target, Speed::default(), false);
+        let w = Rc::downgrade(self);
+        let opened = VideoStream::open(
+            services.runtime(),
+            &auth,
+            StreamSource::History { recording, params },
+            codec,
+            move |ev| {
+                if let Some(p) = w.upgrade() {
+                    p.on_stream_event(ev);
+                }
+            },
+        );
+        match opened {
+            Ok(stream) => {
+                stream.set_mute(self.volume.get() <= 0.0);
+                stream.set_volume(self.volume.get());
+                *slot.borrow_mut() = Some(stream);
+                self.show_position(offset.max(0.0));
+                self.set_notice(Some("Connecting…"));
+                self.set_playing(true);
+            }
+            Err(e) => {
+                tracing::warn!("player stream URL: {e}");
+                self.show_error(&format!("Playback failed: {e}"));
+            }
+        }
+    }
+
+    fn on_stream_event(&self, ev: StreamEvent) {
+        match ev {
+            StreamEvent::Paintable(p) => {
+                self.picture.set_paintable(Some(&p));
+                *self.paintable.borrow_mut() = Some(p);
+            }
+            StreamEvent::Playing => self.set_notice(None),
+            StreamEvent::Reconnecting(why) => {
+                tracing::info!("player: {why}");
+                self.set_notice(Some("Reconnecting…"));
+            }
+            StreamEvent::Offline(why) => {
+                tracing::warn!("player: offline: {why}");
+                if self.position_secs.get() >= self.duration_secs.get() - 3.0 {
+                    self.ended();
+                } else {
+                    self.show_error(&format!("Playback failed: {why}"));
+                }
+            }
+            StreamEvent::Position(ms) => {
+                let secs = (ms as f64 / 1000.0 - self.rec.start_time as f64).max(0.0);
+                self.set_notice(None);
+                if self.playing.get() {
+                    self.show_position(secs);
+                }
+            }
+            StreamEvent::Ended => self.ended(),
+        }
+    }
+
+    fn ended(&self) {
+        self.set_notice(None);
+        self.set_playing(false);
+        self.show_position(self.duration_secs.get());
     }
 
     /// Save the current frame as PNG under the configured snapshot dir.
     fn snapshot(&self) {
-        let Some(paintable) = &self.paintable else {
+        let Some(paintable) = self.paintable.borrow().clone() else {
             self.store.toast("No video frame yet");
             return;
         };
@@ -174,13 +336,19 @@ impl Player {
             t.remove();
         }
         self.bus_guard.borrow_mut().take();
-        if let Some(p) = &self.playbin {
-            let _ = p.set_state(gst::State::Null);
+        match &self.backend {
+            Backend::Mix(stream) => {
+                stream.borrow_mut().take();
+            }
+            Backend::Playbin(p) => {
+                let _ = p.set_state(gst::State::Null);
+            }
+            Backend::None => {}
         }
     }
 }
 
-/// Build the pipeline; `Err` carries a user-facing reason.
+/// Build the time-lapse pipeline; `Err` carries a user-facing reason.
 fn build_pipeline(url: &str) -> Result<(gst::Element, gdk::Paintable), String> {
     let sink = gst::ElementFactory::make("gtk4paintablesink")
         .build()
@@ -240,12 +408,13 @@ pub fn open(
     timecode.set_halign(gtk::Align::End);
     timecode.set_valign(gtk::Align::End);
     overlay.add_overlay(&timecode);
-    let error = label("", &["player-error"]);
-    error.set_halign(gtk::Align::Center);
-    error.set_valign(gtk::Align::Center);
-    error.set_visible(false);
-    error.set_wrap(true);
-    overlay.add_overlay(&error);
+    let notice = label("", &["player-error"]);
+    notice.set_widget_name("player-notice");
+    notice.set_halign(gtk::Align::Center);
+    notice.set_valign(gtk::Align::Center);
+    notice.set_visible(false);
+    notice.set_wrap(true);
+    overlay.add_overlay(&notice);
     frame.set_child(Some(&overlay));
     dialog.body.append(&frame);
 
@@ -255,6 +424,7 @@ pub fn open(
     let play_btn = gtk::Button::new();
     play_btn.add_css_class("play");
     play_btn.add_css_class("icon-34");
+    play_btn.set_widget_name("player-play");
     play_btn.set_valign(gtk::Align::Center);
     transport.append(&play_btn);
     let position = label("0:00", &["position"]);
@@ -304,35 +474,44 @@ pub fn open(
         }
     }
 
-    // ----- pipeline ---------------------------------------------------------
-    let url = services
-        .client()
-        .map(|c| c.recording_stream_url(&rec).to_string());
-    let (playbin, paintable, init_error) = match url {
-        None => (None, None, Some("Not connected".to_string())),
-        Some(url) => match build_pipeline(&url) {
-            Ok((p, paintable)) => (Some(p), Some(paintable), None),
-            Err(e) => (None, None, Some(e)),
-        },
+    // ----- backend ----------------------------------------------------------
+    let time_lapse = rec.event_type == TIME_LAPSE;
+    let mut init_paintable = None;
+    let (backend, init_error) = if !time_lapse {
+        (Backend::Mix(RefCell::new(None)), None)
+    } else {
+        let url = services
+            .client()
+            .map(|c| c.recording_stream_url(&rec).to_string());
+        match url {
+            None => (Backend::None, Some("Not connected".to_string())),
+            Some(url) => match build_pipeline(&url) {
+                Ok((p, paintable)) => {
+                    picture.set_paintable(Some(&paintable));
+                    init_paintable = Some(paintable);
+                    (Backend::Playbin(p), None)
+                }
+                Err(e) => (Backend::None, Some(e)),
+            },
+        }
     };
-    if let Some(p) = &paintable {
-        picture.set_paintable(Some(p));
-    }
 
     let player = Rc::new(Player {
         store: store.clone(),
         rec: rec.clone(),
-        playbin,
-        paintable,
+        backend,
+        paintable: RefCell::new(init_paintable),
         picture: picture.clone(),
         play_btn: play_btn.clone(),
         scale: scale.clone(),
         position,
         duration,
         timecode,
-        error,
+        notice,
         playing: Cell::new(false),
         duration_secs: Cell::new(rec.duration_secs().max(1) as f64),
+        position_secs: Cell::new(0.0),
+        volume: Cell::new(1.0),
         pending_seek: Cell::new(start_offset.filter(|o| *o > 0.0)),
         bus_guard: RefCell::new(None),
         timer: RefCell::new(None),
@@ -342,8 +521,10 @@ pub fn open(
         player.show_error(&e);
     }
 
-    // bus: errors, EOS, async-done (pending seek)
-    if let Some(bus) = player.playbin.as_ref().and_then(|p| p.bus()) {
+    // playbin bus: errors, EOS, async-done (pending seek)
+    if let Backend::Playbin(p) = &player.backend
+        && let Some(bus) = p.bus()
+    {
         let weak = Rc::downgrade(&player);
         let guard = bus.add_watch_local(move |_, msg| {
             let Some(player) = weak.upgrade() else {
@@ -356,10 +537,7 @@ pub fn open(
                     tracing::warn!("playback error: {}", err.error());
                     player.show_error(&format!("Playback failed: {}", err.error()));
                 }
-                gst::MessageView::Eos(_) => {
-                    player.set_playing(false);
-                    player.show_position(player.duration_secs.get());
-                }
+                gst::MessageView::Eos(_) => player.ended(),
                 gst::MessageView::AsyncDone(_) => {
                     player.tick();
                     if let Some(secs) = player.pending_seek.take() {
@@ -374,10 +552,8 @@ pub fn open(
             Ok(g) => *player.bus_guard.borrow_mut() = Some(g),
             Err(e) => tracing::warn!("bus watch: {e}"),
         }
-    }
 
-    // position timer
-    {
+        // position timer
         let weak = Rc::downgrade(&player);
         let id = glib::timeout_add_local(std::time::Duration::from_millis(250), move || match weak
             .upgrade()
@@ -405,11 +581,7 @@ pub fn open(
     }
     {
         let p = player.clone();
-        vol_scale.connect_value_changed(move |s| {
-            if let Some(pb) = &p.playbin {
-                pb.set_property("volume", s.value());
-            }
-        });
+        vol_scale.connect_value_changed(move |s| p.set_volume(s.value()));
     }
     {
         let p = player.clone();
@@ -420,7 +592,7 @@ pub fn open(
         let services = services.clone();
         let rec = rec.clone();
         download.connect_clicked(move |_| {
-            let kind = if rec.event_type == 3 {
+            let kind = if rec.event_type == TIME_LAPSE {
                 DownloadKind::TimeLapse(rec.id)
             } else {
                 DownloadKind::Recording(rec.id)
@@ -462,10 +634,10 @@ pub fn open(
     }
 
     // go
-    if player.playbin.is_some() {
-        player.set_playing(true);
-    } else {
-        player.set_playing(false);
+    match &player.backend {
+        Backend::Mix(_) => player.start_mix(services, start_offset.unwrap_or(0.0)),
+        Backend::Playbin(_) => player.set_playing(true),
+        Backend::None => player.set_playing(false),
     }
 }
 

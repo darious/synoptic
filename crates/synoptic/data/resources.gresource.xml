@@ -65,6 +65,7 @@
     <file alias="icons/scalable/actions/ms-north_east-symbolic.svg" preprocess="xml-stripblanks">icons/ms-north_east-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-north_west-symbolic.svg" preprocess="xml-stripblanks">icons/ms-north_west-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-notifications-symbolic.svg" preprocess="xml-stripblanks">icons/ms-notifications-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ms-close_fullscreen-symbolic.svg" preprocess="xml-stripblanks">icons/ms-close_fullscreen-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-open_in_full-symbolic.svg" preprocess="xml-stripblanks">icons/ms-open_in_full-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-open_with-symbolic.svg" preprocess="xml-stripblanks">icons/ms-open_with-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-pause-fill-symbolic.svg" preprocess="xml-stripblanks">icons/ms-pause-fill-symbolic.svg</file>

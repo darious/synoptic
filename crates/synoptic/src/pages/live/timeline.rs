@@ -1518,7 +1518,8 @@ impl Timeline {
         best.map(|(_, e)| e)
     }
 
-    /// Keyboard: Space pause, ←/→ ±10 s (Shift: ±1 min), Home = live.
+    /// Keyboard: Space pause, ←/→ ±10 s (Shift: ±1 min), Home = live,
+    /// Escape = back from a focused slot to the layout.
     /// Only while the Live page is up and no text field has focus.
     fn key(&self, c: &gtk::EventControllerKey, key: gdk::Key, state: gdk::ModifierType) -> bool {
         if self.store.get().page != crate::state::Page::Live {
@@ -1542,6 +1543,13 @@ impl Timeline {
             gdk::Key::Left => self.step(-step),
             gdk::Key::Right => self.step(step),
             gdk::Key::Home => self.go_live(),
+            gdk::Key::Escape => {
+                if self.store.get().focused_slot.is_none() {
+                    return false;
+                }
+                self.store
+                    .update(crate::state::Change::FocusedSlot, |s| s.focused_slot = None);
+            }
             _ => return false,
         }
         true
@@ -2037,7 +2045,7 @@ impl Timeline {
                 let lanes = self.lanes();
                 let pos = self.position_ms(&pb);
                 Ok(format!(
-                    "mode={:?} paused={} speed={} pos={} ({}) follow={} zoom={} window={}..{} lanes={} chunks={} events={} filter={:?} height={}",
+                    "mode={:?} paused={} speed={} pos={} ({}) follow={} zoom={} window={}..{} lanes={} focus={:?} chunks={} events={} filter={:?} height={}",
                     pb.mode,
                     pb.paused,
                     SPEEDS[pb.speed_index].0,
@@ -2048,6 +2056,7 @@ impl Timeline {
                     format_readout(&local_from_secs(w.start)),
                     format_readout(&local_from_secs(w.end())),
                     lanes.len(),
+                    self.store.get().focused_slot,
                     cache.chunk_count(),
                     cache.event_count(),
                     self.filter.get(),

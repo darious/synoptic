@@ -175,7 +175,7 @@ fn row(ctx: &Rc<Browse>, rec: &TimeLapseRecording, tasks: &[TimeLapseTask]) -> g
     actions.add_css_class("row-actions");
     actions.set_valign(gtk::Align::Center);
 
-    let play_btn = icons::bordered_button("play_arrow_fill", "icon-34", "Play");
+    let play_btn = icons::bordered_button("play_arrow-fill", "icon-34", "Play");
     {
         let ctx = ctx.clone();
         let rec = rec.clone();
