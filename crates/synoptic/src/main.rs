@@ -84,6 +84,15 @@ fn build_ui(app: &gtk::Application) {
         .and_then(|d| d.monitors().item(0))
         .and_downcast::<gtk::gdk::Monitor>()
         .map(|m| m.geometry())
+        .inspect(|g| {
+            tracing::info!(
+                "monitor {}x{} at {},{}",
+                g.width(),
+                g.height(),
+                g.x(),
+                g.y()
+            )
+        })
         .filter(|g| g.width() < 1280 + 40 || g.height() < 800 + 80)
         .inspect(|g| {
             window.set_default_size((g.width() - 40).max(900), (g.height() - 80).max(540));
@@ -129,6 +138,18 @@ fn build_ui(app: &gtk::Application) {
     window.present();
     if small_monitor {
         window.maximize();
+    }
+    {
+        let window = window.clone();
+        glib::timeout_add_local_once(std::time::Duration::from_secs(2), move || {
+            tracing::info!(
+                "window {}x{} maximized={} scale={}",
+                window.width(),
+                window.height(),
+                window.is_maximized(),
+                window.scale_factor()
+            );
+        });
     }
 }
 
