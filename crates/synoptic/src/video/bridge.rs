@@ -284,6 +284,7 @@ impl VideoStream {
             StreamSource::Live { camera_id, profile } => {
                 let url =
                     ss_stream::live_url(&auth.base_url, (*camera_id).max(0) as u32, *profile)?;
+                tracing::info!("camera {camera_id}: live stream profile {:?}", profile);
                 MixStreamConfig::live(url, auth.sid.clone())
             }
             StreamSource::History { params, .. } => {
