@@ -76,15 +76,25 @@ pub fn present(
     layer.add_css_class("dialog-scrim");
     layer.set_hexpand(true);
     layer.set_vexpand(true);
-    // swallow clicks that reach the backdrop (modal); the frame's own
-    // widgets claim theirs first, so only the scrim is affected
+    let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    // swallow presses on the backdrop (modal). Presses inside the frame are
+    // left alone: claiming them here would cancel the buttons' own gestures.
     let block = gtk::GestureClick::new();
-    block.connect_pressed(|g, _, _, _| {
-        g.set_state(gtk::EventSequenceState::Claimed);
-    });
+    block.set_button(0);
+    {
+        let frame = frame.clone();
+        block.connect_pressed(move |g, _, x, y| {
+            let inside = g
+                .widget()
+                .and_then(|layer| frame.compute_bounds(&layer))
+                .is_some_and(|b| b.contains_point(&gtk::graphene::Point::new(x as f32, y as f32)));
+            if !inside {
+                g.set_state(gtk::EventSequenceState::Claimed);
+            }
+        });
+    }
     layer.add_controller(block);
 
-    let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
     frame.add_css_class("dialog");
     frame.set_halign(gtk::Align::Center);
     frame.set_valign(gtk::Align::Center);
