@@ -50,6 +50,11 @@ cargo run -p ss-cli -- --help        # headless test tool (login, cameras, live,
 RUST_LOG=synoptic=debug,ss_stream=debug cargo run -p synoptic   # with logs
 ```
 
+Linux is the primary target. The tree also compiles on macOS (Homebrew
+`gtk4 gstreamer`) and Windows (MSYS2 UCRT64 `gtk4 gstreamer
+gst-plugins-base`), with credentials in the Keychain / Credential Manager,
+but neither is packaged or tested yet.
+
 ## Installing
 
 ```

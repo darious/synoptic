@@ -28,7 +28,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
 clap = { version = "4", features = ["derive", "env"] }
 directories = "6"
-keyring = { version = "3", default-features = false, features = ["async-secret-service", "async-io", "crypto-rust"] }
+keyring = { version = "3", default-features = false }
 # dev
 wiremock = "0.6"
 tokio-test = "0.4"

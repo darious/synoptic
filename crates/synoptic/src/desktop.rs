@@ -11,11 +11,14 @@ use std::path::{Path, PathBuf};
 
 use crate::APP_ID;
 
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const ICON: &str = include_str!("../data/icons/io.github.darious.Synoptic.svg");
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const ICON_SYMBOLIC: &str = include_str!("../data/icons/io.github.darious.Synoptic-symbolic.svg");
 const DESKTOP: &str = include_str!("../data/io.github.darious.Synoptic.desktop");
 
 /// `$XDG_DATA_HOME`, else `~/.local/share`.
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn data_home() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("XDG_DATA_HOME").filter(|p| !p.is_empty()) {
         return Some(PathBuf::from(p));
@@ -45,6 +48,7 @@ pub fn desktop_entry(exe: &Path) -> String {
         + "\n"
 }
 
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn write_if_changed(path: &Path, content: &str) -> std::io::Result<bool> {
     if std::fs::read_to_string(path).is_ok_and(|cur| cur == content) {
         return Ok(false);
@@ -57,6 +61,12 @@ fn write_if_changed(path: &Path, content: &str) -> std::io::Result<bool> {
 }
 
 /// Make sure the launcher entry and icons exist for this binary.
+/// Freedesktop platforms only: on macOS the bundle carries the icon, on
+/// Windows the executable's resources do.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub fn ensure() {}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn ensure() {
     let Some(data) = data_home() else { return };
     let Ok(exe) = std::env::current_exe() else {
@@ -115,6 +125,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     fn write_if_changed_is_idempotent() {
         let dir = std::env::temp_dir().join(format!("synoptic-desktop-{}", std::process::id()));
         let p = dir.join("a/b.txt");

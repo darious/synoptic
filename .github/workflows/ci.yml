@@ -27,3 +27,36 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+
+  # Compile checks only: Linux is the primary target, these keep the tree
+  # portable (keyring backends, no Linux-only syscalls) until the platforms
+  # are packaged. Not required by the branch ruleset.
+  build-macos:
+    name: build (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries
+        run: brew install gtk4 gstreamer pkgconf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --workspace
+
+  build-windows:
+    name: build (Windows, MSYS2 UCRT64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-rust
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-gstreamer
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+      - run: cargo build --workspace

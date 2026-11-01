@@ -3,7 +3,6 @@
 
 use std::collections::VecDeque;
 use std::ffi::OsStr;
-use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
@@ -38,7 +37,9 @@ pub fn find_binary(name: impl AsRef<Path>) -> Option<PathBuf> {
 
 /// Grow the pipe behind `stdin` to [`PIPE_CAPACITY`]. Best effort: a kernel
 /// that refuses (non-Linux, a lowered `pipe-max-size`) keeps the default.
+#[cfg(target_os = "linux")]
 pub(crate) fn grow_pipe_buffer(stdin: &ChildStdin) {
+    use std::os::fd::AsRawFd;
     let fd = stdin.as_raw_fd();
     // SAFETY: fcntl(F_SETPIPE_SZ) on a descriptor we own; it only changes the
     // pipe's buffer size and touches no memory of ours.
@@ -50,6 +51,10 @@ pub(crate) fn grow_pipe_buffer(stdin: &ChildStdin) {
         );
     }
 }
+
+/// `F_SETPIPE_SZ` is Linux-only; elsewhere the default pipe size stays.
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn grow_pipe_buffer(_stdin: &ChildStdin) {}
 
 /// A spawned helper with its stderr drained into a bounded tail.
 pub(crate) struct ChildProcess {

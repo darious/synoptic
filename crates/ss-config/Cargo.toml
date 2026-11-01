@@ -17,7 +17,20 @@ tracing = { workspace = true }
 # shares them. Pure Rust (zbus + RustCrypto), no libdbus or OpenSSL needed.
 # async-io rather than tokio: keyring blocks on its own executor, and doing
 # that inside a tokio worker deadlocks (keyring-rs issue 132).
+# macOS and Windows use their native stores (Keychain, Credential Manager).
 keyring.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { workspace = true, features = ["async-secret-service", "async-io", "crypto-rust"] }
+
+[target.'cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
+keyring = { workspace = true, features = ["async-secret-service", "async-io", "crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { workspace = true, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { workspace = true, features = ["windows-native"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

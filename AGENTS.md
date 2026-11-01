@@ -25,7 +25,7 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 - Fake NAS for UI/CLI testing: `cargo run -p fake-nas -- [--port 5000] [--bind 127.0.0.1] [--fixtures DIR] [--otp CODE] [--user admin] [--password admin] [--seed 1]`; then `SS_PASSWORD=admin ss --host 127.0.0.1 --port 5000 --no-https -u admin cameras` or log the app in with HTTPS off
 - Headless UI harness: `cargo build -p synoptic && UI_ID=0 tools/ui.sh start`, then `UI_ID=0 tools/ui.sh cmd "login dev 127.0.0.1 5000 admin admin" "page live"`, `UI_ID=0 tools/ui.sh shot <name>` (prints a ≤1024 px `.small.png` to view), `log`, `stop`. Driver command table: top of `crates/synoptic/src/driver.rs`. One `UI_ID` per concurrent harness.
 - Install for the current user (release build, desktop entry, hicolor icons): `tools/install.sh` / `tools/install.sh --uninstall`
-- CI: `.github/workflows/ci.yml` runs fmt/clippy/test in a `rust:1-trixie` container (GTK 4.18 is not on Ubuntu LTS runners)
+- CI: `.github/workflows/ci.yml` runs fmt/clippy/test in a `rust:1-trixie` container (GTK 4.18 is not on Ubuntu LTS runners), plus compile-only macOS (Homebrew) and Windows (MSYS2 UCRT64) jobs. Keep the tree portable: `keyring` backends are per-target in `ss-config/Cargo.toml`, Linux-only syscalls (`F_SETPIPE_SZ`) and the XDG launcher entry are `cfg`-gated.
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`
 - Format: `cargo fmt --all` (check with `--check`)
 
