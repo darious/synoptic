@@ -297,6 +297,7 @@ impl VideoStream {
             TungsteniteConnector::new()
         };
 
+        let dump = open_video_dump(&source);
         let inner = Rc::new(Inner {
             source: RefCell::new(source),
             pipeline: RefCell::new(None),
@@ -306,7 +307,7 @@ impl VideoStream {
             dead: Cell::new(false),
             muted: Cell::new(true), // --- audio ---
             volume: Cell::new(1.0),
-            dump: RefCell::new(open_video_dump(&source)),
+            dump: RefCell::new(dump),
         });
         inner.rebuild_pipeline(initial_codec);
 
