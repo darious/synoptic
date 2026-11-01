@@ -138,6 +138,9 @@ pub struct Pipeline {
     audio_dead: Arc<AtomicBool>,
     muted: bool,
     volume: f64,
+    /// Overload: skipping access units until the next keyframe.
+    dropping: std::cell::Cell<bool>,
+    dropped: std::cell::Cell<u32>,
     _bus_watch: Option<gst::bus::BusWatchGuard>,
 }
 
@@ -315,6 +318,8 @@ impl Pipeline {
             audio_dead,
             muted: true,
             volume: 1.0,
+            dropping: std::cell::Cell::new(false),
+            dropped: std::cell::Cell::new(0),
             _bus_watch: bus_watch,
         })
     }
@@ -329,7 +334,32 @@ impl Pipeline {
     }
 
     /// Push one Annex-B access unit. Timestamps come from `do-timestamp`.
+    /// Push one access unit. When the decoder cannot keep up (the appsrc
+    /// queue is nearly full) everything up to the next keyframe is skipped
+    /// instead of letting the queue leak arbitrary frames: a dropped
+    /// keyframe leaves the decoder predicting from nothing (grey / smeared
+    /// picture) until the next one, whereas skipping a whole GOP just lowers
+    /// the frame rate.
     pub fn push(&self, access_unit: Vec<u8>) -> Result<(), gst::FlowError> {
+        let key = is_keyframe(self.codec, &access_unit);
+        if self.dropping.get() {
+            if !key {
+                self.dropped.set(self.dropped.get() + 1);
+                return Ok(());
+            }
+            self.dropping.set(false);
+            tracing::debug!(
+                "decoder behind: skipped {} frames to the next keyframe",
+                self.dropped.replace(0)
+            );
+        } else if !key {
+            let level: u64 = self.appsrc.property("current-level-buffers");
+            if level + 2 >= APPSRC_MAX_BUFFERS {
+                self.dropping.set(true);
+                self.dropped.set(1);
+                return Ok(());
+            }
+        }
         let buffer = gst::Buffer::from_mut_slice(access_unit);
         self.appsrc.push_buffer(buffer).map(|_| ())
     }
@@ -629,6 +659,31 @@ fn audio_sink() -> Result<gst::Element, glib::BoolError> {
         .build()
 }
 
+/// Does this Annex-B access unit contain a random-access picture
+/// (H.264 IDR; H.265 IDR / CRA / BLA)?
+pub fn is_keyframe(codec: Codec, au: &[u8]) -> bool {
+    nal_headers(au).any(|b| match codec {
+        Codec::H264 => b & 0x1f == 5,
+        Codec::H265 => (16..=21).contains(&((b >> 1) & 0x3f)),
+    })
+}
+
+/// The first byte of every NAL unit in an Annex-B byte stream.
+fn nal_headers(au: &[u8]) -> impl Iterator<Item = u8> + '_ {
+    let mut i = 0;
+    std::iter::from_fn(move || {
+        while i + 3 < au.len() {
+            if au[i] == 0 && au[i + 1] == 0 && au[i + 2] == 1 {
+                let h = au[i + 3];
+                i += 4;
+                return Some(h);
+            }
+            i += 1;
+        }
+        None
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -685,5 +740,24 @@ mod tests {
         );
         assert_eq!(Codec::from_camera(ss_api::VideoCodec::H264), Codec::H264);
         assert_eq!(Codec::from_camera(ss_api::VideoCodec::Unknown), Codec::H264);
+    }
+
+    #[test]
+    fn keyframes_are_recognised_per_codec() {
+        // H.264: SPS(7) PPS(8) IDR(5) vs non-IDR slice (1)
+        let idr = [0, 0, 0, 1, 0x67, 0, 0, 0, 1, 0x68, 0, 0, 1, 0x65, 0x88];
+        let p = [0, 0, 0, 1, 0x41, 0x9a];
+        assert!(is_keyframe(Codec::H264, &idr));
+        assert!(!is_keyframe(Codec::H264, &p));
+        // H.265: VPS(32) SPS(33) PPS(34) IDR_W_RADL(19) = 0x26; TRAIL_R(1) = 0x02
+        let idr = [
+            0, 0, 0, 1, 0x40, 0x01, 0, 0, 1, 0x42, 0x01, 0, 0, 1, 0x26, 0x01,
+        ];
+        let trail = [0, 0, 0, 1, 0x02, 0x01, 0xd0];
+        let cra = [0, 0, 1, 0x2a, 0x01];
+        assert!(is_keyframe(Codec::H265, &idr));
+        assert!(is_keyframe(Codec::H265, &cra));
+        assert!(!is_keyframe(Codec::H265, &trail));
+        assert!(!is_keyframe(Codec::H264, &[]));
     }
 }
