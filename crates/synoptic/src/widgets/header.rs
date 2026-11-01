@@ -17,8 +17,10 @@ pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Box {
     header.add_css_class("header");
 
     // 1. logo
-    let logo = gtk::Label::new(Some("Sy"));
+    let logo = gtk::Image::from_icon_name(crate::APP_ID);
+    logo.set_pixel_size(28);
     logo.add_css_class("logo");
+    logo.set_tooltip_text(Some("Synoptic"));
     logo.set_valign(gtk::Align::Center);
     header.append(&logo);
 

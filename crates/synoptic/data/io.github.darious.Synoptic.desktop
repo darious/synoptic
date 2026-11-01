@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Synoptic
+GenericName=Surveillance Station Client
+Comment=Live view, timeline and recordings from a Synology Surveillance Station NAS
+Exec=synoptic
+Icon=io.github.darious.Synoptic
+Terminal=false
+Categories=AudioVideo;Video;Network;
+Keywords=surveillance;camera;synology;nvr;cctv;
+StartupNotify=true
+StartupWMClass=io.github.darious.Synoptic

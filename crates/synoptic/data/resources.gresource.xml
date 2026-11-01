@@ -5,6 +5,8 @@
     <file>style-live.css</file>
     <file>style-browse.css</file>
     <file>style-admin.css</file>
+    <file alias="icons/scalable/apps/io.github.darious.Synoptic.svg" preprocess="xml-stripblanks">icons/io.github.darious.Synoptic.svg</file>
+    <file alias="icons/symbolic/apps/io.github.darious.Synoptic-symbolic.svg" preprocess="xml-stripblanks">icons/io.github.darious.Synoptic-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-account_circle-symbolic.svg" preprocess="xml-stripblanks">icons/ms-account_circle-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-add-symbolic.svg" preprocess="xml-stripblanks">icons/ms-add-symbolic.svg</file>
     <file alias="icons/scalable/actions/ms-add_a_photo-symbolic.svg" preprocess="xml-stripblanks">icons/ms-add_a_photo-symbolic.svg</file>

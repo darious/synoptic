@@ -347,7 +347,7 @@ fn error_label() -> gtk::Label {
 
 /// Open the Login dialog over `parent`.
 pub fn open(parent: &impl IsA<gtk::Window>, store: &Rc<Store>, services: &Rc<Services>) {
-    let dialog = shell::present(parent, 400, "dns", "Connect to NAS", None);
+    let dialog = shell::present(parent, 400, crate::APP_ID, "Connect to NAS", None);
 
     let names: Vec<String> = store.config().profiles.keys().cloned().collect();
     let mut items: Vec<&str> = names.iter().map(String::as_str).collect();

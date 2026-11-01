@@ -40,6 +40,7 @@
 //! | `names` | list named widgets with type and visibility |
 //! | `sleep <ms>` | wait before the next command |
 //! | `shotw <widget-name> <path.png>` | render one named widget (e.g. a popover's child) |
+//! | `icon <icon-name> <px> <path.png>` | render a themed icon at a size (app icon checks) |
 //! | `quit` | exit the app |
 //!
 //! Timeline (Live View; see `pages/live/timeline.rs::driver_command`):
@@ -523,6 +524,49 @@ async fn run(
                 }
             }
             last
+        }
+        "icon" => {
+            // render a themed icon at a size, on a background, into a PNG
+            let name = args
+                .first()
+                .ok_or("usage: icon <icon-name> <px> <path.png>")?;
+            let px: i32 = args
+                .get(1)
+                .and_then(|s| s.parse().ok())
+                .ok_or("usage: icon <icon-name> <px> <path.png>")?;
+            let path = args
+                .get(2)
+                .ok_or("usage: icon <icon-name> <px> <path.png>")?;
+            let window = gtk::Window::list_toplevels()
+                .into_iter()
+                .filter_map(|o| o.downcast::<gtk::Window>().ok())
+                .next()
+                .ok_or("no window")?;
+            let theme = gtk::IconTheme::for_display(&WidgetExt::display(&window));
+            let icon = theme.lookup_icon(
+                name,
+                &[],
+                px,
+                1,
+                gtk::TextDirection::Ltr,
+                gtk::IconLookupFlags::empty(),
+            );
+            let snapshot = gtk::Snapshot::new();
+            let pad = (px / 8).max(2) as f32;
+            let total = px as f32 + 2.0 * pad;
+            snapshot.append_color(
+                &gtk::gdk::RGBA::new(0.93, 0.93, 0.93, 1.0),
+                &gtk::graphene::Rect::new(0.0, 0.0, total, total),
+            );
+            snapshot.translate(&gtk::graphene::Point::new(pad, pad));
+            icon.snapshot(&snapshot, px as f64, px as f64);
+            let node = snapshot.to_node().ok_or("nothing to render")?;
+            let renderer = window.renderer().ok_or("no renderer")?;
+            renderer
+                .render_texture(&node, None)
+                .save_to_png(path)
+                .map_err(|e| e.to_string())?;
+            Ok(format!("{path} {px}px"))
         }
         "quit" => {
             app.quit();

@@ -65,10 +65,10 @@ pub fn build(store: &Rc<Store>, _services: &Rc<Services>) -> gtk::Widget {
     column.add_css_class("about");
     column.set_valign(gtk::Align::Start);
 
-    let tile = gtk::Label::new(Some("Sy"));
-    tile.add_css_class("tile");
-    tile.set_size_request(64, 64);
+    let tile = gtk::Image::from_icon_name(crate::APP_ID);
+    tile.set_pixel_size(96);
     tile.set_halign(gtk::Align::Center);
+    tile.set_widget_name("about-icon");
     column.append(&tile);
 
     let title = label("Synoptic", &["title"]);

@@ -34,7 +34,14 @@ pub fn present(
 
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     header.add_css_class("dialog-header");
-    header.append(&icons::image(icon, 18));
+    // a themed icon name (the app icon) is used as is; else a Material name
+    if icon.contains('.') {
+        let img = gtk::Image::from_icon_name(icon);
+        img.set_pixel_size(24);
+        header.append(&img);
+    } else {
+        header.append(&icons::image(icon, 18));
+    }
     let titles = gtk::Box::new(gtk::Orientation::Vertical, 0);
     titles.set_valign(gtk::Align::Center);
     titles.append(&label(title, &["dialog-title"]));

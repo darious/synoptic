@@ -5,6 +5,7 @@
 //! compiled into the binary as a GResource (`ms-<name>-symbolic`).
 //! Module map and the parallel-work split: `docs/ui-plan.md`.
 
+mod desktop;
 mod dialogs;
 mod driver;
 mod icons;
@@ -75,6 +76,8 @@ fn build_ui(app: &gtk::Application) {
         .default_height(800)
         .build();
     window.set_size_request(1100, 600);
+    window.set_icon_name(Some(APP_ID));
+    desktop::ensure();
     apply_theme(&window, store.get().theme);
 
     // header spans the full width; below it: rail | camera panel | stage

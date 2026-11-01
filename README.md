@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="crates/synoptic/data/icons/io.github.darious.Synoptic.svg" width="128" alt="Synoptic">
+</p>
+
 # Synoptic
 
 A native Linux desktop client for Synology Surveillance Station, written in
@@ -43,6 +47,19 @@ cargo run -p synoptic                # the GTK app
 cargo run -p ss-cli -- --help        # headless test tool (login, cameras, live, history, …)
 RUST_LOG=synoptic=debug,ss_stream=debug cargo run -p synoptic   # with logs
 ```
+
+## Installing
+
+```
+tools/install.sh            # release build → ~/.local/bin, desktop entry + icon → ~/.local/share
+tools/install.sh --uninstall
+```
+
+Even without installing, the app writes its launcher entry and icon under
+`~/.local/share` the first time it runs (pointing at the binary that ran), so
+`cargo run -p synoptic` also gets a window icon and a launcher entry. The
+desktop entry is `io.github.darious.Synoptic.desktop`; the app icon and its
+symbolic variant live in `crates/synoptic/data/icons/`.
 
 ## Developing without a NAS
 

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b3540"/>
+      <stop offset="1" stop-color="#151b22"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b6775"/>
+      <stop offset="1" stop-color="#262e37"/>
+    </linearGradient>
+    <radialGradient id="glass" cx="0.42" cy="0.38" r="0.65">
+      <stop offset="0" stop-color="#8ccbff"/>
+      <stop offset="0.45" stop-color="#2f8fe8"/>
+      <stop offset="1" stop-color="#0a2d5e"/>
+    </radialGradient>
+  </defs>
+  <rect x="8" y="10" width="112" height="112" rx="26" fill="#000000" opacity="0.3"/>
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#tile)"/>
+  <rect x="9" y="9" width="110" height="110" rx="25" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="2"/>
+  <circle cx="64" cy="64" r="44" fill="url(#ring)"/>
+  <circle cx="64" cy="64" r="37" fill="#0b1118"/>
+  <circle cx="64" cy="64" r="32" fill="url(#glass)"/>
+  <circle cx="64" cy="64" r="12" fill="#06182f"/>
+  <path d="M44 48a26 26 0 0 1 36-9" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="100" cy="28" r="7" fill="#e23b3b"/>
+</svg>

@@ -24,6 +24,7 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 - Test: `cargo test --workspace`
 - Fake NAS for UI/CLI testing: `cargo run -p fake-nas -- [--port 5000] [--bind 127.0.0.1] [--fixtures DIR] [--otp CODE] [--user admin] [--password admin] [--seed 1]`; then `SS_PASSWORD=admin ss --host 127.0.0.1 --port 5000 --no-https -u admin cameras` or log the app in with HTTPS off
 - Headless UI harness: `cargo build -p synoptic && UI_ID=0 tools/ui.sh start`, then `UI_ID=0 tools/ui.sh cmd "login dev 127.0.0.1 5000 admin admin" "page live"`, `UI_ID=0 tools/ui.sh shot <name>` (prints a ≤1024 px `.small.png` to view), `log`, `stop`. Driver command table: top of `crates/synoptic/src/driver.rs`. One `UI_ID` per concurrent harness.
+- Install for the current user (release build, desktop entry, hicolor icons): `tools/install.sh` / `tools/install.sh --uninstall`
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`
 - Format: `cargo fmt --all` (check with `--check`)
 
@@ -44,6 +45,7 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 - `tools/ui.sh` starts the app with `DBUS_SESSION_BUS_ADDRESS=disabled:`; without it a second `synoptic` becomes a GApplication remote of a running instance and exits 0 with an empty log. `shot` can report "nothing to render" while video is drawing — retry.
 - Video: `decodebin3` picks `vah264dec`, whose NV12/VAMemory output does not negotiate with `gtk4paintablesink` when the sink has no GL context; keep `videoconvert` (and `vapostproc` when available) in front of the sink, and the software-decoder fallback in `video/pipeline.rs`.
 - Recording/event playback (`dialogs/player.rs`) goes over MixStream (`stmSrc=2`, then `action=play … stmSrc=1`), the same path as Live View history and the one the Synology client uses; the HTTP `EventStream` URL is only used for time-lapse (`playbin3`). A real DSM answered `EventStream` with an empty body ("Stream doesn't contain enough data").
+- App icon (a lens on a slate tile): `data/icons/io.github.darious.Synoptic{,-symbolic}.svg` (hand-written SVG, 128 px / 16 px grids), served from the gresource as `scalable/apps` + `symbolic/apps`, set with `window.set_icon_name(APP_ID)`, shown in the header, login dialog and About; `desktop.rs` writes the desktop entry + icons under `$XDG_DATA_HOME` at startup (Wayland shows a window icon only via a desktop entry; `tools/ui.sh` points `XDG_DATA_HOME` at the run dir); `data/io.github.darious.Synoptic.desktop` is the launcher. Check a change with the driver's `icon <name> <px> <png>` at 16/32/64/128.
 - Icon names mirror `data/icons/ms-<name>-symbolic.svg`; filled variants are `<name>-fill` (e.g. `play_arrow-fill`), never `_fill`. A wrong name silently renders GTK's broken-image glyph, so check new icons on a screenshot.
 - Live View focus: double-click (or the slot's "Fill view" button, driver `focus <i>`) shows one slot alone with one timeline lane; the other slots stay mounted and streaming, hidden, so the layout returns instantly. Escape or another double-click goes back.
 - GTK4/GStreamer dev packages are installed; libmpv is not (ss-play uses the `mpv` binary).

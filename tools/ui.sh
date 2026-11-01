@@ -36,7 +36,7 @@ case "${1:-}" in
     gtk4-broadwayd "$DISP" >"$D/broadway.log" 2>&1 &
     echo $! >"$D/broadway.pid"
     sleep 0.5
-    DBUS_SESSION_BUS_ADDRESS=disabled: XDG_CONFIG_HOME="$D/config" GDK_BACKEND=broadway BROADWAY_DISPLAY="$DISP" \
+    DBUS_SESSION_BUS_ADDRESS=disabled: XDG_CONFIG_HOME="$D/config" XDG_DATA_HOME="$D/data" GDK_BACKEND=broadway BROADWAY_DISPLAY="$DISP" \
       SYNOPTIC_DRIVER="$FIFO" \
       RUST_LOG="${RUST_LOG:-synoptic=debug,ss_api=info,ss_stream=info}" \
       "$REPO/target/debug/synoptic" >"$D/app.log" 2>&1 &
