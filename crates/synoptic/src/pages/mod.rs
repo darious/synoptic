@@ -21,6 +21,9 @@ pub const LOGGED_OUT: &str = "logged-out";
 
 pub fn build(store: &Rc<Store>, services: &Rc<Services>) -> gtk::Stack {
     let stack = gtk::Stack::new();
+    // the visible page alone decides the minimum size, not the widest page
+    stack.set_hhomogeneous(false);
+    stack.set_vhomogeneous(false);
     stack.add_css_class("stage");
     stack.set_transition_type(gtk::StackTransitionType::None);
 

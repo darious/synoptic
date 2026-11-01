@@ -38,6 +38,14 @@ fn main() -> glib::ExitCode {
 
     gio::resources_register_include!("synoptic.gresource").expect("embedded resources");
     gstreamer::init().expect("GStreamer init");
+    // Windows: Pango's default backend (DirectWrite) does not see fontconfig
+    // application fonts; route it through fontconfig so the bundled IBM Plex
+    // is used.
+    #[cfg(target_os = "windows")]
+    if std::env::var_os("PANGOCAIRO_BACKEND").is_none() {
+        // SAFETY: single-threaded here, before GTK/Pango read the environment.
+        unsafe { std::env::set_var("PANGOCAIRO_BACKEND", "fontconfig") };
+    }
     fonts::install();
 
     let app = gtk::Application::builder().application_id(APP_ID).build();
@@ -148,6 +156,13 @@ fn build_ui(app: &gtk::Application) {
         let window = window.clone();
         glib::timeout_add_local_once(std::time::Duration::from_secs(2), move || {
             let min_w = |w: &gtk::Widget| w.measure(gtk::Orientation::Horizontal, -1).0;
+            if let Some(stack) = stage.downcast_ref::<gtk::Stack>() {
+                let mut child = stack.first_child();
+                while let Some(c) = child {
+                    tracing::info!("page {:?}: min width {}", stack.page(&c).name(), min_w(&c));
+                    child = c.next_sibling();
+                }
+            }
             tracing::info!(
                 "window {}x{} maximized={} scale={} min widths: header {} rail {} panel {} stage {}",
                 window.width(),
