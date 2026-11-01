@@ -199,18 +199,25 @@ impl AudioTrack {
     }
 
     fn decide(&self) -> AacParams {
-        let payloads: Vec<&[u8]> = self.pending.iter().map(|(_, p, _)| p.as_slice()).collect();
-        let framing = match aac::detect_frame_prefix_len(&payloads) {
-            Some(n) => AacFraming::PayloadPrefix(n),
-            None => AacFraming::HeaderPrepend,
-        };
+        // the codec-info trailer's channel count is authoritative; without
+        // it, score framings for either layout and read the count off the
+        // frames afterwards
+        let pairs: Vec<(&[u8], &[u8])> = self
+            .pending
+            .iter()
+            .map(|(t, p, _)| (t.as_slice(), p.as_slice()))
+            .collect();
+        let framing = aac::detect_framing(&pairs, self.declared.channels.unwrap_or(0))
+            .unwrap_or(AacFraming::HeaderPrepend);
         let raw: Vec<Vec<u8>> = self
             .pending
             .iter()
             .map(|(tail, payload, _)| aac::reconstruct_frame(framing, tail, payload))
             .collect();
-        let channels =
-            aac::detect_channel_count(&raw, self.declared.channels.unwrap_or(DEFAULT_CHANNELS));
+        let channels = match self.declared.channels {
+            Some(c) => c,
+            None => aac::detect_channel_count(&raw, DEFAULT_CHANNELS),
+        };
         let intervals: Vec<Duration> = self
             .pending
             .windows(2)

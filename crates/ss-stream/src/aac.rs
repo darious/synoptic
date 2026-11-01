@@ -108,6 +108,64 @@ pub fn detect_frame_prefix_len<F: AsRef<[u8]>>(frames: &[F]) -> Option<usize> {
         .find(|&len| usable.iter().all(|f| (f[len] >> 5) != AAC_ELEMENT_ID_END))
 }
 
+/// Does a reconstructed frame open like a raw AAC-LC frame for `channels`
+/// (1 = single_channel_element, 2 = channel_pair_element, else either)?
+/// Checks the element id and the `ics_reserved_bit` that must be 0.
+pub fn opens_like_raw_frame(raw: &[u8], channels: u8) -> bool {
+    if raw.len() < 2 {
+        return false;
+    }
+    let id = raw[0] >> 5;
+    // encoders number the first element of a frame 0: a non-zero
+    // element_instance_tag is a DSM prefix byte that happens to look like
+    // an element id
+    if raw[0] & 0x1e != 0 {
+        return false;
+    }
+    match (channels, id) {
+        // SCE: id(3) tag(4) global_gain(8) then ics_reserved_bit → byte 1 bit 0
+        (1, 0b000) => raw[1] & 1 == 0,
+        // CPE: id(3) tag(4) common_window(1); with common_window the
+        // ics_info follows: reserved bit = byte 1 bit 7
+        (2, 0b001) => raw[0] & 1 == 0 || raw[1] & 0x80 == 0,
+        (1, _) | (2, _) => false,
+        (_, 0b000) => raw[1] & 1 == 0,
+        (_, 0b001) => true,
+        _ => false,
+    }
+}
+
+/// Pick the framing under which the most of `frames` (`(header tail,
+/// payload)` pairs) open like raw AAC frames for `channels` (0 = unknown).
+/// Candidates: the last four header bytes prepended, or 0..=8 payload bytes
+/// stripped. Ties go to the header-prepend layout, then the shortest
+/// prefix. `None` when no candidate fits a single frame.
+pub fn detect_framing<T: AsRef<[u8]>, P: AsRef<[u8]>>(
+    frames: &[(T, P)],
+    channels: u8,
+) -> Option<AacFraming> {
+    let score = |framing: AacFraming| {
+        frames
+            .iter()
+            .filter(|(t, p)| {
+                opens_like_raw_frame(
+                    &reconstruct_frame(framing, t.as_ref(), p.as_ref()),
+                    channels,
+                )
+            })
+            .count()
+    };
+    let mut best = (score(AacFraming::HeaderPrepend), AacFraming::HeaderPrepend);
+    for n in 0..=PREFIX_MAX_LEN {
+        let f = AacFraming::PayloadPrefix(n);
+        let sc = score(f);
+        if sc > best.0 {
+            best = (sc, f);
+        }
+    }
+    (best.0 > 0).then_some(best.1)
+}
+
 /// The channel count named by the first reconstructed frame that opens
 /// with a single_channel_element (1) or channel_pair_element (2);
 /// `declared` (from [`parse_audio_config`], else stereo) if none does.
@@ -447,5 +505,37 @@ mod tests {
         assert_eq!(parse_audio_config(b"one|16000|", "10"), None);
         assert_eq!(parse_audio_config(b"1|sixteen|", "10"), None);
         assert_eq!(parse_audio_config(b"1|99999|", "8"), None);
+    }
+
+    #[test]
+    fn detect_framing_scores_header_prepend_for_a_real_camera() {
+        // Header tails and payload heads captured from a mono 16 kHz camera
+        // whose AAC frame starts in the last four header bytes.
+        let frames: Vec<(Vec<u8>, Vec<u8>)> = [
+            ("010235ac", "cc7a2a898a8920b3"),
+            ("010835ac", "0d1413050c4134b7"),
+            ("011235a0", "b48b0c3596856b57"),
+            ("010e35a0", "10640d05968710b7"),
+            ("012835ac", "54d6ca0882d6a4b4"),
+            ("011035ac", "d4564c0586882197"),
+        ]
+        .iter()
+        .map(|(t, p)| (hex(t), hex(p)))
+        .collect();
+        assert_eq!(detect_framing(&frames, 1), Some(AacFraming::HeaderPrepend));
+        // a 3-byte prefix camera (stereo) is still found
+        let prefixed: Vec<(Vec<u8>, Vec<u8>)> = (0..6u8)
+            .map(|i| {
+                let mut v = vec![0x34, 0x1f, 0xe0 | i];
+                v.push(0b001 << 5);
+                v.extend(std::iter::repeat_n(0xaa, 19));
+                (b"ec=5".to_vec(), v)
+            })
+            .collect();
+        assert_eq!(
+            detect_framing(&prefixed, 2),
+            Some(AacFraming::PayloadPrefix(3))
+        );
+        assert_eq!(detect_framing::<Vec<u8>, Vec<u8>>(&[], 1), None);
     }
 }
