@@ -184,7 +184,7 @@ impl Pipeline {
         // decoders give I420/NV12 (VAMemory for the VA ones), so a converter
         // always sits in front of it. With hardware decoding the VA
         // post-processor converts on the GPU and videoconvert passes through.
-        let postproc = if software {
+        let postproc = if software || !cfg!(target_os = "linux") {
             None
         } else {
             gst::ElementFactory::make("vapostproc")

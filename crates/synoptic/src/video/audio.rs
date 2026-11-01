@@ -59,7 +59,13 @@ pub struct AudioTrack {
     pending: Vec<(Vec<u8>, Vec<u8>, Instant)>,
     /// Logged once per stream when a frame cannot be framed.
     warned: bool,
+    /// `SYNOPTIC_AUDIO_DUMP=<file>`: the first frames of every stream are
+    /// appended there as hex, to debug a camera's AAC framing offline.
+    dump: Option<(std::path::PathBuf, usize)>,
 }
+
+/// Frames written per stream when dumping.
+const DUMP_FRAMES: usize = 60;
 
 /// Audio frames buffered before the AAC framing is decided.
 pub const DETECTION_FRAMES: usize = DETECTION_INTERVALS + 1;
@@ -78,6 +84,33 @@ impl AudioTrack {
             params: None,
             pending: Vec::new(),
             warned: false,
+            dump: std::env::var_os("SYNOPTIC_AUDIO_DUMP")
+                .map(|p| (std::path::PathBuf::from(p), DUMP_FRAMES)),
+        }
+    }
+
+    fn dump(&mut self, kind: &str, header: &[u8], payload: &[u8]) {
+        let Some((path, left)) = &mut self.dump else {
+            return;
+        };
+        if *left == 0 {
+            return;
+        }
+        *left -= 1;
+        let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        let line = format!(
+            "{kind} header={} len={} payload={}\n",
+            String::from_utf8_lossy(header),
+            payload.len(),
+            hex(&payload[..payload.len().min(96)])
+        );
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = f.write_all(line.as_bytes());
         }
     }
 
@@ -94,6 +127,16 @@ impl AudioTrack {
     /// Feed one MixStream frame; returns the audio buffers to push (none for
     /// video, control frames, or AAC frames still held for detection).
     pub fn feed(&mut self, frame: &Frame) -> Vec<Vec<u8>> {
+        if self.dump.is_some() {
+            let kind = match frame.kind() {
+                FrameKind::CodecInfo { .. } => Some("codec-info"),
+                FrameKind::Audio => Some("audio"),
+                _ => None,
+            };
+            if let Some(k) = kind {
+                self.dump(k, frame.header().raw(), frame.payload());
+            }
+        }
         match frame.kind() {
             FrameKind::CodecInfo {
                 audio,
