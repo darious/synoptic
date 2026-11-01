@@ -165,6 +165,11 @@ impl Pipeline {
             // gstreamer-app is built without the v1_20 feature; the typed
             // setters for these two are behind it, the properties are not.
             .property("max-buffers", APPSRC_MAX_BUFFERS)
+            // appsrc also caps the queue at 200 KB by default: smaller than
+            // one 4K keyframe, so it silently leaked frames on 4K streams
+            // long before the buffer cap (and `push`'s keyframe-aligned
+            // skipping) came into play
+            .property("max-bytes", 0u64)
             .property_from_str("leaky-type", "downstream")
             .build();
 
