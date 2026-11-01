@@ -31,6 +31,7 @@
 //! | `select <index\|none>` | select a slot |
 //! | `focus <index\|none>` | what double-clicking a slot does: show it alone (one timeline lane), or back to the layout |
 //! | `theme <dark\|light>`, `panel <on\|off>`, `timeline <on\|off>` | shell toggles |
+//! | `resize <w> <h>` | resize the main window (small-screen checks) |
 //! | `click <widget-name>` | activate a named widget (button, menu button, toggle, row) |
 //! | `type <widget-name> <text…>` | set an entry's text |
 //! | `show <widget-name>`, `hide <widget-name>` | force a named widget visible/hidden (e.g. a slot's hover toolbar) |
@@ -379,6 +380,24 @@ async fn run(
             }
             store.emit(&Change::SelectedSlot);
             Ok(format!("{:?}", store.get().focused_slot))
+        }
+        "resize" => {
+            let w: i32 = args
+                .first()
+                .and_then(|s| s.parse().ok())
+                .ok_or("usage: resize <w> <h>")?;
+            let h: i32 = args
+                .get(1)
+                .and_then(|s| s.parse().ok())
+                .ok_or("usage: resize <w> <h>")?;
+            let window = gtk::Window::list_toplevels()
+                .into_iter()
+                .filter_map(|o| o.downcast::<gtk::Window>().ok())
+                .find(|w| w.transient_for().is_none())
+                .ok_or("no window")?;
+            window.unmaximize();
+            window.set_default_size(w, h);
+            Ok(format!("{}x{}", window.width(), window.height()))
         }
         "theme" => {
             let t = match args.first().copied() {

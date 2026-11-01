@@ -7,8 +7,11 @@
 //! nothing else in those directories is touched. `tools/install.sh` does
 //! the same for a release build.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+use std::path::PathBuf;
 
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 use crate::APP_ID;
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
@@ -113,6 +116,8 @@ pub fn ensure() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    use crate::APP_ID;
 
     #[test]
     fn exec_points_at_the_binary_and_keeps_the_rest() {

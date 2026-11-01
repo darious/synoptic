@@ -382,9 +382,11 @@ pub fn open(parent: &impl IsA<gtk::Window>, store: &Rc<Store>, services: &Rc<Ser
     let https = gtk::CheckButton::with_label("Use HTTPS");
     https.set_widget_name("login-https");
     https.set_active(true);
-    form.append(&https);
     let verify = gtk::CheckButton::with_label("Verify SSL certificate");
-    form.append(&verify);
+    let tls_row = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    tls_row.append(&https);
+    tls_row.append(&verify);
+    form.append(&tls_row);
     form.append(&divider_h());
 
     let username = gtk::Entry::new();

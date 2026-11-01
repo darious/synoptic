@@ -75,7 +75,19 @@ fn build_ui(app: &gtk::Application) {
         .default_width(1280)
         .default_height(800)
         .build();
-    window.set_size_request(1100, 600);
+    // The spec's 1100×600 minimum does not fit 1024×768 (VMs, small laptops):
+    // keep a softer floor and start maximised when the monitor is smaller than
+    // the default size.
+    window.set_size_request(900, 540);
+    if let Some(monitor) = gtk::gdk::Display::default()
+        .and_then(|d| d.monitors().item(0))
+        .and_downcast::<gtk::gdk::Monitor>()
+    {
+        let g = monitor.geometry();
+        if g.width() < 1280 + 40 || g.height() < 800 + 80 {
+            window.maximize();
+        }
+    }
     window.set_icon_name(Some(APP_ID));
     desktop::ensure();
     apply_theme(&window, store.get().theme);

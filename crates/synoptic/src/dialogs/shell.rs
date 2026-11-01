@@ -60,7 +60,21 @@ pub fn present(
 
     let body = gtk::Box::new(gtk::Orientation::Vertical, 12);
     body.add_css_class("dialog-body");
-    frame.append(&body);
+    // taller than the screen (small monitors, Windows VMs): scroll the body
+    let scroller = gtk::ScrolledWindow::new();
+    scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    scroller.set_propagate_natural_height(true);
+    scroller.set_propagate_natural_width(true);
+    scroller.set_child(Some(&body));
+    if let Some(monitor) = parent
+        .upcast_ref::<gtk::Window>()
+        .surface()
+        .and_then(|s| gtk::gdk::Display::default().and_then(|d| d.monitor_at_surface(&s)))
+    {
+        // header + footer + window chrome take roughly 160 px
+        scroller.set_max_content_height((monitor.geometry().height() - 160).max(200));
+    }
+    frame.append(&scroller);
 
     let footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     footer.add_css_class("dialog-footer");
