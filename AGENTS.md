@@ -25,6 +25,7 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 - Fake NAS for UI/CLI testing: `cargo run -p fake-nas -- [--port 5000] [--bind 127.0.0.1] [--fixtures DIR] [--otp CODE] [--user admin] [--password admin] [--seed 1]`; then `SS_PASSWORD=admin ss --host 127.0.0.1 --port 5000 --no-https -u admin cameras` or log the app in with HTTPS off
 - Headless UI harness: `cargo build -p synoptic && UI_ID=0 tools/ui.sh start`, then `UI_ID=0 tools/ui.sh cmd "login dev 127.0.0.1 5000 admin admin" "page live"`, `UI_ID=0 tools/ui.sh shot <name>` (prints a ≤1024 px `.small.png` to view), `log`, `stop`. Driver command table: top of `crates/synoptic/src/driver.rs`. One `UI_ID` per concurrent harness.
 - Install for the current user (release build, desktop entry, hicolor icons): `tools/install.sh` / `tools/install.sh --uninstall`
+- CI: `.github/workflows/ci.yml` runs fmt/clippy/test in a `rust:1-trixie` container (GTK 4.18 is not on Ubuntu LTS runners)
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`
 - Format: `cargo fmt --all` (check with `--check`)
 
@@ -54,5 +55,6 @@ Reference implementation (Python/GTK, BSD-2) is cloned at
 - There is no NAS reachable from CI/agents. Integration against a NAS is
   manual via `ss-cli`.
 - UI testing uses `fake-nas` (above) + GTK Broadway, not a real NAS. `fake-nas` needs `test.h264`/`test.aac`/`test.mp4` in the fixtures dir (makes `snap.jpg` with ffmpeg); its tests skip when they are missing.
-- Vendor installer `*.exe`, the design zip and `~/.cache/synoptic/**` stay out of git.
+- Vendor installer `*.exe`, the design zip and `~/.cache/synoptic/**` stay out of git. README screenshots (`docs/screenshots/`) come from the fake NAS via the harness, never from a real NAS.
+- License is AGPL-3.0-or-later (`LICENSE`, workspace `license`, README, About); third-party credits stay in `NOTICE`.
 - `ss-cli` wiremock tests spawn the `ss` binary via `CARGO_BIN_EXE_ss`, which cargo bakes in at compile time and does not re-track; after moving the checkout, `touch crates/ss-cli/tests/cameras_wiremock.rs`.

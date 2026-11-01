@@ -122,7 +122,7 @@ pub fn build(store: &Rc<Store>, _services: &Rc<Services>) -> gtk::Widget {
 
     // info rows
     let info = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    info.append(&info_row("License", &label("BSD 2-Clause", &["val"])));
+    info.append(&info_row("License", &label("AGPL-3.0-or-later", &["val"])));
     let repo: gtk::Widget = if REPO_URL.is_empty() {
         label("—", &["val", "muted"]).upcast()
     } else {

@@ -11,6 +11,8 @@ Synoptic talks to the NAS over the same Web API and MixStream WebSocket the
 official clients use, and decodes H.264 and H.265 in hardware through VAAPI,
 so cameras the browser UI refuses to play work here.
 
+![Live View: a 2x3 camera grid in history playback over the multi-lane timeline](docs/screenshots/live-view.png)
+
 **Status:** alpha. The full application builds and its unit tests pass, but it
 has not yet been exercised against a real NAS. Expect rough edges.
 
@@ -98,4 +100,5 @@ See `NOTICE` for attributions.
 
 ## License
 
-BSD-2-Clause. See `LICENSE`.
+GNU Affero General Public License v3.0 or later. See `LICENSE`. Third-party
+credits (the BSD-2 reference client, Material Symbols icons) are in `NOTICE`.
