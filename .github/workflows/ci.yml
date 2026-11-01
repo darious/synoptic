@@ -59,4 +59,6 @@ jobs:
             mingw-w64-ucrt-x86_64-gtk4
             mingw-w64-ucrt-x86_64-gstreamer
             mingw-w64-ucrt-x86_64-gst-plugins-base
-      - run: cargo build --workspace
+      # ss-play drives mpv over a Unix socket (named pipes on Windows are a
+      # separate job of work); it and ss-cli are developer tools, not the app.
+      - run: cargo build --workspace --exclude ss-play --exclude ss-cli
