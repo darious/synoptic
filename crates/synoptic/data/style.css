@@ -153,6 +153,11 @@ popover > contents {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 popover > arrow { background-color: var(--panel); border-color: var(--border); }
+/* GtkDropDown's popup list: GTK's default view colours are white */
+popover listview, popover listview > row { background-color: transparent; color: var(--text); }
+popover listview > row { min-height: 30px; padding: 0 8px; border-radius: 4px; }
+popover listview > row:hover, popover listview > row:selected { background-color: var(--surface); color: var(--text); }
+popover listview > row:selected image { color: var(--blue); }
 .menu-row {
   min-height: 32px; padding: 0 8px; border-radius: 4px;
   background-color: transparent; border: none; font-weight: 400;

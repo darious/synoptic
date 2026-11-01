@@ -180,6 +180,11 @@ fn build_ui(app: &gtk::Application) {
 
 fn apply_theme(window: &impl IsA<gtk::Widget>, theme: Theme) {
     let w = window.as_ref();
+    // widgets the CSS does not cover fall back to GTK's own palette: keep
+    // that in step with ours
+    if let Some(settings) = gtk::Settings::default() {
+        settings.set_gtk_application_prefer_dark_theme(theme == Theme::Dark);
+    }
     match theme {
         Theme::Dark => {
             w.remove_css_class("light");
