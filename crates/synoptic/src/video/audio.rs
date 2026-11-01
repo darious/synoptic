@@ -99,8 +99,9 @@ impl AudioTrack {
         *left -= 1;
         let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
         let line = format!(
-            "{kind} header={} len={} payload={}\n",
+            "{kind} header={} tail={} len={} payload={}\n",
             String::from_utf8_lossy(header),
+            hex(&header[header.len().saturating_sub(8)..]),
             payload.len(),
             hex(&payload[..payload.len().min(96)])
         );
