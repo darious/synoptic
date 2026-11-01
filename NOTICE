@@ -12,3 +12,6 @@ Protocol knowledge in this project comes from two sources:
    google/material-design-icons, Apache License 2.0
    (https://github.com/google/material-design-icons/blob/master/LICENSE),
    renamed to ms-<name>-symbolic.svg for GTK's symbolic icon handling.
+4. Fonts in crates/synoptic/data/fonts are IBM Plex Sans and IBM Plex Mono,
+   Copyright IBM Corp., SIL Open Font License 1.1 (see data/fonts/OFL.txt),
+   bundled unmodified.

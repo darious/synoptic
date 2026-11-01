@@ -39,7 +39,7 @@ Debian/Ubuntu dependencies:
 ```
 sudo apt install libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   gstreamer1.0-gtk4 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
-  gstreamer1.0-vaapi gstreamer1.0-libav gstreamer1.0-tools fonts-ibm-plex
+  gstreamer1.0-vaapi gstreamer1.0-libav gstreamer1.0-tools libfontconfig-dev
 ```
 
 Then:

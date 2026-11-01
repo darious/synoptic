@@ -34,3 +34,7 @@ ss-config = { path = "../ss-config" }
 
 [build-dependencies]
 glib-build-tools = "0.21"
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+# registers the bundled IBM Plex fonts with fontconfig (src/fonts.rs)
+yeslogic-fontconfig-sys = "6"

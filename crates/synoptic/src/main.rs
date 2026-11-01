@@ -8,6 +8,7 @@
 mod desktop;
 mod dialogs;
 mod driver;
+mod fonts;
 mod icons;
 mod pages;
 mod services;
@@ -37,6 +38,7 @@ fn main() -> glib::ExitCode {
 
     gio::resources_register_include!("synoptic.gresource").expect("embedded resources");
     gstreamer::init().expect("GStreamer init");
+    fonts::install();
 
     let app = gtk::Application::builder().application_id(APP_ID).build();
     app.connect_startup(|_| setup_styling());
@@ -104,12 +106,15 @@ fn build_ui(app: &gtk::Application) {
 
     // header spans the full width; below it: rail | camera panel | stage
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    root.append(&widgets::header::build(&store, &services));
+    let header = widgets::header::build(&store, &services);
+    root.append(&header);
 
     let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     body.set_vexpand(true);
-    body.append(&widgets::rail::build(&store));
-    body.append(&widgets::camera_panel::build(&store));
+    let rail = widgets::rail::build(&store);
+    body.append(&rail);
+    let panel = widgets::camera_panel::build(&store);
+    body.append(&panel);
     let stage = pages::build(&store, &services);
     stage.set_hexpand(true);
     body.append(&stage);
@@ -142,12 +147,17 @@ fn build_ui(app: &gtk::Application) {
     {
         let window = window.clone();
         glib::timeout_add_local_once(std::time::Duration::from_secs(2), move || {
+            let min_w = |w: &gtk::Widget| w.measure(gtk::Orientation::Horizontal, -1).0;
             tracing::info!(
-                "window {}x{} maximized={} scale={}",
+                "window {}x{} maximized={} scale={} min widths: header {} rail {} panel {} stage {}",
                 window.width(),
                 window.height(),
                 window.is_maximized(),
-                window.scale_factor()
+                window.scale_factor(),
+                min_w(header.upcast_ref()),
+                min_w(rail.upcast_ref()),
+                min_w(panel.upcast_ref()),
+                min_w(stage.upcast_ref()),
             );
         });
     }
